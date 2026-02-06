@@ -75,6 +75,10 @@ class BatchScheduler:
                  self.database.update_batch_job_status(batch_id, 'completed')
             return
 
+        # Model Grouping
+        # Sort pending tasks by model name to minimize thrashing.
+        pending_tasks.sort(key=lambda t: t.body.get("model", ""))
+
         for task in pending_tasks:
             # --- Dependency Check (OMITTED for base version) ---
             # if has_unmet_dependencies(task): continue
