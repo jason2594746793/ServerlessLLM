@@ -54,6 +54,10 @@ origins = [origin for origin in origins_env.split(",") if origin]
 origins += ["http://localhost", "http://localhost:3000"]
 
 
+from sllm.batch_scheduler import BatchScheduler
+
+# ...
+
 def create_app(
     database: Optional[Database] = None,
     pylet_client: Optional[PyletClient] = None,
@@ -63,17 +67,17 @@ def create_app(
 ) -> FastAPI:
     """
     Create the SLLM API Gateway FastAPI application.
-
-    Args:
-        database: SQLite database instance
-        pylet_client: Pylet client instance (may be None if Pylet unavailable)
-        router: Global Router instance for request routing
-        autoscaler: AutoScaler instance (for connecting Router to it)
-        config: Head configuration
-
-    Returns:
-        FastAPI application
     """
+    
+    # Initialize Scheduler if database and router are present
+    # Initialize Scheduler if database and router are present and enabled
+    scheduler: Optional[BatchScheduler] = None
+    if database and router:
+        if os.getenv("ENABLE_BATCH_SCHEDULER", "1").lower() in ("1", "true", "yes"):
+            scheduler = BatchScheduler(database, router)
+            logger.info("BatchScheduler enabled via config")
+        else:
+            logger.info("BatchScheduler disabled via config")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -83,6 +87,7 @@ def create_app(
         app.state.router = router
         app.state.autoscaler = autoscaler
         app.state.config = config
+        app.state.scheduler = scheduler
 
         # Connect Router to Autoscaler for metrics push
         if router and autoscaler:
@@ -91,11 +96,18 @@ def create_app(
         # Start router if provided
         if router:
             await router.start()
+            
+        # Start Scheduler if initialized
+        if scheduler:
+            await scheduler.start()
 
         logger.info("API Gateway started")
         yield
 
         # Cleanup
+        if scheduler:
+            await scheduler.stop()
+            
         if router:
             await router.drain(timeout=10.0)
             await router.stop()
@@ -283,6 +295,121 @@ def create_app(
                 status_code=500,
                 detail=f"Failed to delete deployment: {str(e)}",
             )
+
+    # -------------------------------------------------------------------------
+    # Batch Job Endpoints
+    # -------------------------------------------------------------------------
+
+    @app.post("/v1/batches")
+    async def create_batch_handler(request: Request):
+        """Create a new batch job."""
+        try:
+            body = await request.json()
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid JSON payload: {str(e)}"
+            )
+
+        tasks = body.get("tasks")
+        if not tasks or not isinstance(tasks, list):
+            raise HTTPException(
+                status_code=400,
+                detail="Request body must include a 'tasks' list",
+            )
+
+        # Validate tasks
+        for task in tasks:
+            if not all(
+                k in task for k in ("custom_id", "method", "url", "body")
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Each task must have custom_id, method, url, and body",
+                )
+
+        import uuid
+
+        db: Database = request.app.state.database
+        batch_id = f"batch_{uuid.uuid4().hex[:8]}"
+
+        try:
+            # Create batch job
+            db.create_batch_job(batch_id, metadata=body.get("metadata"))
+
+            # Create tasks
+            for task in tasks:
+                task_id = f"task_{uuid.uuid4().hex[:16]}"
+                db.create_batch_task(
+                    task_id=task_id,
+                    batch_id=batch_id,
+                    custom_id=task["custom_id"],
+                    method=task["method"],
+                    url=task["url"],
+                    body=task["body"],
+                    dependencies=task.get("dependencies"),
+                )
+
+            logger.info(f"Created batch job {batch_id} with {len(tasks)} tasks")
+
+            return {
+                "id": batch_id,
+                "object": "batch",
+                "status": "pending",
+                "request_counts": {
+                    "total": len(tasks),
+                    "completed": 0,
+                    "failed": 0,
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to create batch job: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail="Internal error creating batch job",
+            )
+
+    @app.get("/v1/batches/{batch_id}")
+    async def get_batch_handler(batch_id: str, request: Request):
+        """Get batch job status."""
+        db: Database = request.app.state.database
+        batch_job = db.get_batch_job(batch_id)
+
+        if not batch_job:
+            raise HTTPException(
+                status_code=404, detail=f"Batch job {batch_id} not found"
+            )
+
+        batch_tasks = db.get_batch_tasks(batch_id)
+
+        completed_count = sum(
+            1 for t in batch_tasks if t.status == "completed"
+        )
+        failed_count = sum(1 for t in batch_tasks if t.status == "failed")
+
+        return {
+            "id": batch_job.id,
+            "object": "batch",
+            "status": batch_job.status,
+            "metadata": batch_job.metadata,
+            "created_at": batch_job.created_at,
+            "request_counts": {
+                "total": len(batch_tasks),
+                "completed": completed_count,
+                "failed": failed_count,
+            },
+            "tasks": [
+                {
+                    "id": t.id,
+                    "custom_id": t.custom_id,
+                    "status": t.status,
+                    "output": t.output,
+                    "started_at": t.started_at,
+                    "completed_at": t.completed_at,
+                }
+                for t in batch_tasks
+            ],
+        }
 
     # -------------------------------------------------------------------------
     # Inference Endpoints

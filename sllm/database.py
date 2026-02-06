@@ -40,17 +40,15 @@ from sllm.logger import init_logger
 logger = init_logger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 3
-
+SCHEMA_VERSION = 4
 
 @dataclass
 class Deployment:
     """Deployment configuration and scaling state.
-
+    
     A deployment represents a (model_name, backend) pair - the basic
     scheduling and control unit in ServerlessLLM.
     """
-
     id: str  # deployment_id: "meta-llama/Llama-3.1-8B:vllm"
     model_name: str  # HuggingFace model: "meta-llama/Llama-3.1-8B"
     backend: str  # "vllm" or "sglang"
@@ -72,25 +70,134 @@ class Deployment:
         """
         return f"{model_name}:{backend}"
 
-
 @dataclass
 class NodeStorage:
     """Storage info from sllm-store on a node."""
-
     node_name: str
     sllm_store_endpoint: Optional[str]
     cached_models: List[str]
     last_cache_update: str
 
+@dataclass
+class BatchJob:
+    """A batch job containing multiple tasks."""
+    id: str
+    status: str
+    metadata: Optional[Dict]
+    created_at: str
+    updated_at: str
+
+
+@dataclass
+class BatchTask:
+    """A single task within a batch job."""
+
+    id: str  # UUID
+    batch_id: str
+    custom_id: str  # User-provided ID
+    method: str
+    url: str
+    body: Dict
+    status: str  # "pending", "completed", "failed"
+    dependencies: List[str]
+    output: Optional[Dict]
+    created_at: str
+    updated_at: str
+    # Metrics
+    started_at: Optional[str] = None      # When execution started (sent to vLLM)
+    completed_at: Optional[str] = None    # When execution finished
+
 
 class Database:
     """
     SQLite database for SLLM state persistence.
-
+    
     Thread-safe via connection-per-thread pattern.
     Uses WAL mode for better concurrent read performance.
     """
+# ... (omitting previous lines for brevity) ...
 
+    # -------------------------------------------------------------------------
+    # Batch Job Operations
+    # -------------------------------------------------------------------------
+
+    def update_batch_job_status(self, batch_id: str, status: str):
+        """Update batch job status."""
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE batch_jobs SET status = ?, updated_at = ? WHERE id = ?",
+            (status, now, batch_id)
+        )
+        logger.debug(f"Updated batch {batch_id} status to {status}")
+
+    def update_batch_task_result(
+        self, task_id: str, status: str, output: Optional[Dict] = None
+    ):
+        """Update task status and output."""
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+        output_json = json.dumps(output) if output else None
+        
+        conn.execute(
+            """
+            UPDATE batch_tasks 
+            SET status = ?, output = ?, updated_at = ? 
+            WHERE id = ?
+            """,
+            (status, output_json, now, task_id)
+        )
+
+    def get_pending_batch_ids(self) -> List[str]:
+        """Get IDs of all batches that are pending or in_progress."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT id FROM batch_jobs WHERE status IN ('pending', 'in_progress')"
+        ).fetchall()
+        return [row[0] for row in rows]
+
+    def create_batch_job(self, batch_id: str, metadata: Optional[Dict] = None) -> "BatchJob":
+        """Create a new batch job."""
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+        metadata_json = json.dumps(metadata) if metadata else None
+
+        conn.execute(
+            "INSERT INTO batch_jobs (id, status, metadata, created_at, updated_at) "
+            "VALUES (?, 'pending', ?, ?, ?)",
+            (batch_id, metadata_json, now, now),
+        )
+        return BatchJob(
+            id=batch_id,
+            status="pending",
+            metadata=metadata,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def get_batch_job(self, batch_id: str) -> Optional["BatchJob"]:
+        """Get a batch job by ID."""
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM batch_jobs WHERE id = ?", (batch_id,)
+        ).fetchone()
+
+        if not row:
+            return None
+        return self._row_to_batch_job(row)
+
+    def _row_to_batch_job(self, row: sqlite3.Row) -> "BatchJob":
+        metadata = None
+        if "metadata" in row.keys() and row["metadata"]:
+            metadata = json.loads(row["metadata"])
+            
+        return BatchJob(
+            id=row["id"],
+            status=row["status"],
+            metadata=metadata,
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
     def __init__(self, db_path: str = "/var/lib/sllm/state.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,6 +256,8 @@ class Database:
 
         if from_version < 3:
             self._migrate_v3(conn)
+        if from_version < 4:
+            self._migrate_v4(conn)
 
         # Update schema version
         conn.execute("DELETE FROM schema_version")
@@ -211,6 +320,46 @@ class Database:
         """)
 
         logger.info("Created v3 schema with deployment terminology")
+
+    def _migrate_v4(self, conn: sqlite3.Connection):
+        """Create v4 schema with batch job support (Squashed v4-v6)."""
+        # Batch Jobs table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS batch_jobs (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'pending',
+                metadata TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
+        # Batch Tasks table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS batch_tasks (
+                id TEXT PRIMARY KEY,
+                batch_id TEXT NOT NULL,
+                custom_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                url TEXT NOT NULL,
+                body TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                dependencies TEXT,
+                output TEXT,
+                started_at TEXT,
+                completed_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(batch_id) REFERENCES batch_jobs(id)
+            )
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_batch_tasks_batch_id
+            ON batch_tasks(batch_id)
+        """)
+
+        logger.info("Created v4 schema (Batch Support)")
 
     # -------------------------------------------------------------------------
     # Deployment CRUD Operations
@@ -365,6 +514,139 @@ class Database:
             backend_config=backend_config,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+        )
+
+    # -------------------------------------------------------------------------
+    # Batch Job Operations
+    # -------------------------------------------------------------------------
+
+    # Job methods defined above...
+
+    def create_batch_task(
+        self,
+        task_id: str,
+        batch_id: str,
+        custom_id: str,
+        method: str,
+        url: str,
+        body: Dict,
+        dependencies: Optional[List[str]] = None,
+    ) -> "BatchTask":
+        """Create a new batch task."""
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+        body_json = json.dumps(body)
+        deps_json = json.dumps(dependencies) if dependencies else None
+
+        conn.execute(
+            """
+            INSERT INTO batch_tasks (
+                id, batch_id, custom_id, method, url, body, status,
+                dependencies, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+            """,
+            (
+                task_id,
+                batch_id,
+                custom_id,
+                method,
+                url,
+                body_json,
+                deps_json,
+                now,
+                now,
+            ),
+        )
+        return BatchTask(
+            id=task_id,
+            batch_id=batch_id,
+            custom_id=custom_id,
+            method=method,
+            url=url,
+            body=body,
+            status="pending",
+            dependencies=dependencies or [],
+            output=None,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def upsert_batch_task(
+        self,
+        task_id: str,
+        batch_id: str,
+        custom_id: str,
+        method: str,
+        url: str,
+        body: Dict,
+        status: str = "pending",
+        dependencies: Optional[List[str]] = None,
+        output: Optional[Dict] = None,
+        started_at: Optional[str] = None,
+        completed_at: Optional[str] = None,
+    ):
+        """Insert or update a batch task with metrics support."""
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+        body_json = json.dumps(body)
+        deps_json = json.dumps(dependencies or [])
+        output_json = json.dumps(output) if output else None
+
+        conn.execute(
+            """
+            INSERT INTO batch_tasks (
+                id, batch_id, custom_id, method, url, body, status, dependencies,
+                output, started_at, completed_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                status = excluded.status,
+                output = excluded.output,
+                started_at = COALESCE(excluded.started_at, batch_tasks.started_at),
+                completed_at = COALESCE(excluded.completed_at, batch_tasks.completed_at),
+                updated_at = excluded.updated_at
+            """,
+            (
+                task_id,
+                batch_id,
+                custom_id,
+                method,
+                url,
+                body_json,
+                status,
+                deps_json,
+                output_json,
+                started_at,
+                completed_at,
+                now,
+                now,
+            ),
+        )
+
+    def get_batch_tasks(self, batch_id: str) -> List["BatchTask"]:
+        """Get all tasks for a batch job."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT * FROM batch_tasks WHERE batch_id = ?", (batch_id,)
+        ).fetchall()
+        return [self._row_to_batch_task(row) for row in rows]
+
+    def _row_to_batch_task(self, row: sqlite3.Row) -> "BatchTask":
+        return BatchTask(
+            id=row["id"],
+            batch_id=row["batch_id"],
+            custom_id=row["custom_id"],
+            method=row["method"],
+            url=row["url"],
+            body=json.loads(row["body"]),
+            status=row["status"],
+            dependencies=(
+                json.loads(row["dependencies"]) if row["dependencies"] else []
+            ),
+            output=json.loads(row["output"]) if row["output"] else None,
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            started_at=row["started_at"] if "started_at" in row.keys() else None,
+            completed_at=row["completed_at"] if "completed_at" in row.keys() else None,
         )
 
     # -------------------------------------------------------------------------
@@ -567,6 +849,8 @@ class Database:
         conn.execute("DELETE FROM deployments")
         conn.execute("DELETE FROM node_storage")
         conn.execute("DELETE FROM deployment_endpoints")
+        conn.execute("DELETE FROM batch_jobs")
+        conn.execute("DELETE FROM batch_tasks")
         logger.warning("Database reset - all data deleted")
 
 
