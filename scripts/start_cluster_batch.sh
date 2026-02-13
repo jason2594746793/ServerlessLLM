@@ -14,6 +14,18 @@ PYLET_BIN=.venv/bin/pylet
 SLLM_BIN=.venv/bin/sllm
 PORT=8343
 
+echo "=== GPU Configuration ==="
+if [ -n "$CUDA_VISIBLE_DEVICES" ]; then
+    export CUDA_VISIBLE_DEVICES
+    echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
+else
+    echo "CUDA_VISIBLE_DEVICES: Not Set (Using all available GPUs)"
+fi
+
+echo "Visible GPUs (as seen by PyTorch):"
+$PYTHON -c "import torch; print(f'Count: {torch.cuda.device_count()}'); print([torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())])" || echo "Failed to query PyTorch."
+echo "========================="
+
 # Paths (using distinct directories for isolation)
 MODELS_DIR="./models_batch"
 DB_PATH="./state_batch.db"
@@ -33,9 +45,10 @@ $PYLET_BIN start > pylet_head_batch.log 2>&1 &
 echo "Pylet Head PID: $!"
 sleep 2
 
-echo "=== 2. Starting Pylet Worker (8 GPUs) ==="
+echo "=== 2. Starting Pylet Worker (2 GPUs) ==="
 # Connects to localhost:8000
-$PYLET_BIN start --head localhost:8000 --gpu-units 8 > pylet_worker_batch.log 2>&1 &
+# We explicitly pass the env var again to be absolutely sure
+CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES $PYLET_BIN start --head localhost:8000 --gpu-units 2 > pylet_worker_batch.log 2>&1 &
 echo "Pylet Worker PID: $!"
 sleep 2
 
@@ -43,7 +56,7 @@ echo "=== 3. Starting SLLM Head (Gateway + Router + Batch Scheduler) ==="
 # Explicitly enable batch scheduler
 export ENABLE_BATCH_SCHEDULER=true
 
-$SLLM_BIN start \
+CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES $SLLM_BIN start \
     --host 0.0.0.0 \
     --port $PORT \
     --pylet-endpoint http://localhost:8000 \

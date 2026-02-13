@@ -61,6 +61,7 @@ def build_vllm_command(
         "--port $PORT",
         "--host 0.0.0.0",
         f"--tensor-parallel-size {tp}",
+        "--enable-prefix-caching",
     ]
 
     if max_model_len:
