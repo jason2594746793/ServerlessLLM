@@ -21,9 +21,26 @@ from typing import Tuple
 
 from sllm.database import Deployment
 
-VENV_VLLM = "/opt/venvs/vllm"
-VENV_SGLANG = "/opt/venvs/sglang"
-VENV_SLLM_STORE = "/opt/venvs/sllm-store"
+import os
+
+# Detect environment
+if os.path.exists("/opt/venvs"):
+    VENV_VLLM = "/opt/venvs/vllm"
+    VENV_SGLANG = "/opt/venvs/sglang"
+    VENV_SLLM_STORE = "/opt/venvs/sllm-store"
+else:
+    # Local development fallback
+    # Assuming standard structure: root/.venv
+    # We need absolute path for Pylet
+    _cwd = os.getcwd()
+    _venv_path = os.path.join(_cwd, ".venv")
+    if not os.path.exists(_venv_path):
+         # Try to find it if we are in a subdir
+         _venv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.venv"))
+
+    VENV_VLLM = _venv_path
+    VENV_SGLANG = _venv_path
+    VENV_SLLM_STORE = _venv_path
 
 
 def build_vllm_command(

@@ -13,8 +13,8 @@ def generate_thrashing_workload(num_pairs=5):
     # Using two models that are relatively large but will run on the current A5000 setup.
     # We use Qwen-14B and Qwen-7B to simulate "large" models relative to available memory,
     # or just two distinct models to force switching.
-    model_a = "Qwen/Qwen2.5-7B-Instruct" 
-    model_b = "meta-llama/Meta-Llama-3-8B-Instruct" 
+    model_a = "Qwen/Qwen3-0.6B" 
+    model_b = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B" 
 
     tasks = []
     for i in range(num_pairs):
@@ -25,8 +25,8 @@ def generate_thrashing_workload(num_pairs=5):
             "url": "/v1/chat/completions",
             "body": {
                 "model": model_a,
-                "messages": [{"role": "user", "content": f"Say 'A' {i}"}],
-                "max_tokens": 10
+                "messages": [{"role": "user", "content": f"what is machine learning{i}"}],
+                "max_tokens": 100
             }
         })
         # Task B
@@ -36,8 +36,8 @@ def generate_thrashing_workload(num_pairs=5):
             "url": "/v1/chat/completions", 
             "body": {
                 "model": model_b,
-                "messages": [{"role": "user", "content": f"Say 'B' {i}"}],
-                "max_tokens": 10
+                "messages": [{"role": "user", "content": f"say something in chinese{i}"}],
+                "max_tokens": 100
             }
         })
     return tasks
@@ -67,17 +67,33 @@ def monitor_batch(batch_id, base_url="http://localhost:8343"):
                 status_history.append((time.time(), status))
                 last_status = status
             
-            # If in progress, print a dot every few seconds to show life
+                
+            # If in progress, print dynamic status line
             if status == "in_progress":
-                completed = data.get("request_counts", {}).get("completed", 0)
-                sys.stdout.write(f"\r[{time.time() - start_time:.2f}s] In Progress: {completed} completed")
+                counts = data.get("request_counts", {})
+                completed = counts.get("completed", 0)
+                failed = counts.get("failed", 0)
+                total = counts.get("total", "?")
+                
+                # Check individual task progress if we have the task list
+                current_tasks = data.get("tasks", [])
+                completed_ids = [t.get("custom_id", t["id"]) for t in current_tasks if t["status"] == "completed"]
+                
+                msg = f"\r[{time.time() - start_time:6.2f}s] Progress: {completed}/{total} (Failed: {failed}) | " 
+                if completed_ids:
+                    msg += f"Latest Done: {completed_ids[-1]}"
+                
+                sys.stdout.write(msg.ljust(100))
                 sys.stdout.flush()
 
             if status in ["completed", "failed", "cancelled"]:
-                print(f"\nFinal Status: {status}")
+                print(f"\n\n[{time.time() - start_time:.2f}s] Final Status: {status}")
+                if status == "failed":
+                    print("!!! BATCH FAILED !!!")
                 break
                 
             time.sleep(1)
+            
         except KeyboardInterrupt:
             print("\nMonitoring stopped by user.")
             break
@@ -103,8 +119,8 @@ def monitor_batch(batch_id, base_url="http://localhost:8343"):
         return
 
     # Header
-    print(f"{'Task ID':<15} | {'Model':<25} | {'Total Duration':<15} | {'Est. Load Time':<15} | {'Inference (Est)':<15} | {'Gap (Teardown)':<15}")
-    print("-" * 100)
+    print(f"{'Task ID':<20} | {'Model':<30} | {'Total Duration':<15} | {'Est. Load Time':<15} | {'Inference (Est)':<15} | {'Gap (Teardown)':<15}")
+    print("-" * 115)
     
     total_execution_sums = 0.0
     total_load_est = 0.0
@@ -120,6 +136,8 @@ def monitor_batch(batch_id, base_url="http://localhost:8343"):
         
         # Identify model from ID if possible (our script names them task-A/B)
         model_label = "Model A" if "-A" in t_id else "Model B" if "-B" in t_id else "?"
+        # Try to extract actual model name if we tracked it (we didn't store it in DB output directly, but we know it from inputs)
+        # Just use label for now.
         
         start_str = t.get("started_at")
         end_str = t.get("completed_at")
@@ -159,9 +177,9 @@ def monitor_batch(batch_id, base_url="http://localhost:8343"):
             except Exception as e:
                 duration_str = "Err"
 
-        print(f"{t_id:<15} | {model_label:<25} | {duration_str:<15} | {load_est_str:<15} | {INFERENCE_BASELINE:<15} | {gap_str:<15}")
+        print(f"{t_id:<20} | {model_label:<30} | {duration_str:<15} | {load_est_str:<15} | {INFERENCE_BASELINE:<15} | {gap_str:<15}")
 
-    print("-" * 100)
+    print("-" * 115)
     
     if valid_tasks > 0:
         avg_duration = total_execution_sums / valid_tasks
@@ -172,8 +190,23 @@ def monitor_batch(batch_id, base_url="http://localhost:8343"):
         print(f"1. Average Task Duration:       {avg_duration:.2f}s")
         print(f"2. Average Model Loading Time:  {avg_load:.2f}s")
         print(f"3. Thrashing Overhead:          {thrashing_percentage:.1f}%")
-        print("-" * 100)
-    print("=" * 100)
+        print(f"4. Throughput:                  {valid_tasks / duration:.2f} tasks/second")
+        print(f"5. Total Batch Duration:        {duration:.2f}s")
+        print("-" * 115)
+    print("=" * 115)
+
+    # Save full result to file
+    result_filename = "thrashing_benchmark_result.json"
+    try:
+        # Fetch final state one last time to be sure
+        resp = requests.get(f"{base_url}/v1/batches/{batch_id}")
+        final_data = resp.json()
+        
+        with open(result_filename, "w") as f:
+            json.dump(final_data, f, indent=4)
+        print(f"\n[INFO] Full benchmark result saved to: {result_filename}")
+    except Exception as e:
+        print(f"\n[ERROR] Failed to save result file: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Run a 'Thrashing' Benchmark")
@@ -190,6 +223,7 @@ def main():
     }
     
     try:
+        print(f"Submitting batch to {args.url}...")
         resp = requests.post(f"{args.url}/v1/batches", json=payload)
         resp.raise_for_status()
         batch_data = resp.json()

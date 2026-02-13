@@ -233,3 +233,8 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# ServerlessLLM specific ignores
+*.db
+*.db-shm
+*.db-wal

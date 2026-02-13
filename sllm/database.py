@@ -99,7 +99,6 @@ class BatchTask:
     url: str
     body: Dict
     status: str  # "pending", "completed", "failed"
-    dependencies: List[str]
     output: Optional[Dict]
     created_at: str
     updated_at: str
@@ -115,7 +114,6 @@ class Database:
     Thread-safe via connection-per-thread pattern.
     Uses WAL mode for better concurrent read performance.
     """
-# ... (omitting previous lines for brevity) ...
 
     # -------------------------------------------------------------------------
     # Batch Job Operations
@@ -344,7 +342,6 @@ class Database:
                 url TEXT NOT NULL,
                 body TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
-                dependencies TEXT,
                 output TEXT,
                 started_at TEXT,
                 completed_at TEXT,
@@ -530,20 +527,18 @@ class Database:
         method: str,
         url: str,
         body: Dict,
-        dependencies: Optional[List[str]] = None,
     ) -> "BatchTask":
         """Create a new batch task."""
         conn = self._get_connection()
         now = datetime.now(timezone.utc).isoformat()
         body_json = json.dumps(body)
-        deps_json = json.dumps(dependencies) if dependencies else None
 
         conn.execute(
             """
             INSERT INTO batch_tasks (
                 id, batch_id, custom_id, method, url, body, status,
-                dependencies, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
             """,
             (
                 task_id,
@@ -552,7 +547,6 @@ class Database:
                 method,
                 url,
                 body_json,
-                deps_json,
                 now,
                 now,
             ),
@@ -565,7 +559,6 @@ class Database:
             url=url,
             body=body,
             status="pending",
-            dependencies=dependencies or [],
             output=None,
             created_at=now,
             updated_at=now,
@@ -580,7 +573,6 @@ class Database:
         url: str,
         body: Dict,
         status: str = "pending",
-        dependencies: Optional[List[str]] = None,
         output: Optional[Dict] = None,
         started_at: Optional[str] = None,
         completed_at: Optional[str] = None,
@@ -589,15 +581,14 @@ class Database:
         conn = self._get_connection()
         now = datetime.now(timezone.utc).isoformat()
         body_json = json.dumps(body)
-        deps_json = json.dumps(dependencies or [])
         output_json = json.dumps(output) if output else None
 
         conn.execute(
             """
             INSERT INTO batch_tasks (
-                id, batch_id, custom_id, method, url, body, status, dependencies,
+                id, batch_id, custom_id, method, url, body, status,
                 output, started_at, completed_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 status = excluded.status,
                 output = excluded.output,
@@ -613,7 +604,6 @@ class Database:
                 url,
                 body_json,
                 status,
-                deps_json,
                 output_json,
                 started_at,
                 completed_at,
@@ -639,9 +629,6 @@ class Database:
             url=row["url"],
             body=json.loads(row["body"]),
             status=row["status"],
-            dependencies=(
-                json.loads(row["dependencies"]) if row["dependencies"] else []
-            ),
             output=json.loads(row["output"]) if row["output"] else None,
             created_at=row["created_at"],
             updated_at=row["updated_at"],

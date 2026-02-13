@@ -75,16 +75,37 @@ class BatchScheduler:
                  self.database.update_batch_job_status(batch_id, 'completed')
             return
 
-        # Model Grouping
+        # --- OPTIMIZATION: Model Grouping (Fusion) ---
         # Sort pending tasks by model name to minimize thrashing.
         pending_tasks.sort(key=lambda t: t.body.get("model", ""))
 
-        for task in pending_tasks:
-            # --- Dependency Check (OMITTED for base version) ---
-            # if has_unmet_dependencies(task): continue
-            
-            # Execute
-            await self._execute_task(task)
+        # --- OPTIMIZATION (Option 1): Async with Semaphore ---
+        # Pros: Smoother flow, max resource utilization. Cons: Complex to tune limit.
+        # buffer_limit = getattr(self.router.config, 'max_buffer_size', 10)
+        # semaphore = asyncio.Semaphore(buffer_limit)
+        # 
+        # async def _sem_execute(task):
+        #     async with semaphore:
+        #         await self._execute_task(task)
+        # 
+        # logger.info(f"Processing {len(pending_tasks)} tasks with semaphore (limit: {buffer_limit})")
+        # await asyncio.gather(*(_sem_execute(task) for task in pending_tasks))
+
+        # --- OPTIMIZATION (Option 2): Chunked Execution ---
+        # Pros: Simple, guarantees no buffer overflow. Cons: Stop-and-wait behavior reduces throughput.
+        buffer_limit = getattr(self.router.config, 'max_buffer_size', 10)
+        chunk_size = max(1, buffer_limit)
+        logger.info(f"Processing {len(pending_tasks)} tasks in chunks of {chunk_size}")
+
+        for i in range(0, len(pending_tasks), chunk_size):
+            chunk = pending_tasks[i : i + chunk_size]
+            execution_futures = [self._execute_task(task) for task in chunk]
+            await asyncio.gather(*execution_futures)
+
+        # --- BASELINE (Option 3): Synchronous Execution ---
+        # Pros: Zero overhead, deterministic. Cons: Extremely slow (no parallelism).
+        # for task in pending_tasks:
+        #     await self._execute_task(task)
 
     async def _execute_task(self, task: BatchTask):
         logger.info(f"Executing task {task.id} (Batch: {task.batch_id})")

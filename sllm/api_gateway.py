@@ -346,7 +346,6 @@ def create_app(
                     method=task["method"],
                     url=task["url"],
                     body=task["body"],
-                    dependencies=task.get("dependencies"),
                 )
 
             logger.info(f"Created batch job {batch_id} with {len(tasks)} tasks")
