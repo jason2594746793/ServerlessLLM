@@ -2,6 +2,17 @@
 
 ServerlessLLM provides an OpenAI-compatible Batch API, designed for high-throughput, offline processing of large datasets. By submitting tasks in batches, the system optimizes GPU utilization, reduces model switching overhead, and enables processing millions of documents without holding concurrent HTTP connections.
 
+## Starting the Server
+
+Before submitting any batches, ensure the cluster is running in batch mode:
+
+```bash
+# Execute this in the ServerlessLLM directory
+./scripts/start_cluster_batch.sh
+```
+
+---
+
 ## Two Ways to Submit
 
 We support two submission methods to accommodate different workload sizes:
@@ -18,7 +29,9 @@ Create a file where **each line** is a valid JSON object representing a single c
 
 ```jsonl
 {"custom_id": "req-01", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "meta-llama/Meta-Llama-3-8B-Instruct", "messages": [{"role": "user", "content": "What is AI?"}]}}
-{"custom_id": "req-02", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "Qwen/Qwen2.5-7B-Instruct", "messages": [{"role": "user", "content": "Translate hello."}]}}
+{"custom_id": "req-02", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "meta-llama/Meta-Llama-3-8B-Instruct", "messages": [{"role": "user", "content": "Write a short poem about space."}]}}
+{"custom_id": "req-03", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "Qwen/Qwen2.5-7B-Instruct", "messages": [{"role": "user", "content": "Translate hello to French."}]}}
+{"custom_id": "req-04", "method": "POST", "url": "/v1/chat/completions", "body": {"model": "Qwen/Qwen2.5-7B-Instruct", "messages": [{"role": "user", "content": "What is the boiling point of water?"}]}}
 ```
 
 ### Step 2: Upload the file
@@ -58,12 +71,39 @@ curl -X POST http://localhost:8343/v1/batches \
   -d '{
     "tasks": [
       {
-        "custom_id": "task-A",
+        "custom_id": "task-llama-1",
         "method": "POST",
         "url": "/v1/chat/completions",
         "body": {
           "model": "meta-llama/Meta-Llama-3-8B-Instruct",
           "messages": [{"role": "user", "content": "1+1=?"}]
+        }
+      },
+      {
+        "custom_id": "task-llama-2",
+        "method": "POST",
+        "url": "/v1/chat/completions",
+        "body": {
+          "model": "meta-llama/Meta-Llama-3-8B-Instruct",
+          "messages": [{"role": "user", "content": "Name a database."}]
+        }
+      },
+      {
+        "custom_id": "task-qwen-1",
+        "method": "POST",
+        "url": "/v1/chat/completions",
+        "body": {
+          "model": "Qwen/Qwen2.5-7B-Instruct",
+          "messages": [{"role": "user", "content": "Explain gravity."}]
+        }
+      },
+      {
+        "custom_id": "task-qwen-2",
+        "method": "POST",
+        "url": "/v1/chat/completions",
+        "body": {
+          "model": "Qwen/Qwen2.5-7B-Instruct",
+          "messages": [{"role": "user", "content": "Who is Alan Turing?"}]
         }
       }
     ]
