@@ -40,7 +40,7 @@ from sllm.logger import init_logger
 logger = init_logger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 @dataclass
 class Deployment:
@@ -79,6 +79,15 @@ class NodeStorage:
     last_cache_update: str
 
 @dataclass
+class FileObject:
+    """A file uploaded by the user."""
+    id: str  # e.g., "file-..."
+    filename: str
+    bytes: int
+    purpose: str
+    created_at: str
+
+@dataclass
 class BatchJob:
     """A batch job containing multiple tasks."""
     id: str
@@ -86,6 +95,7 @@ class BatchJob:
     metadata: Optional[Dict]
     created_at: str
     updated_at: str
+    input_file_id: Optional[str] = None
 
 
 @dataclass
@@ -154,21 +164,24 @@ class Database:
         ).fetchall()
         return [row[0] for row in rows]
 
-    def create_batch_job(self, batch_id: str, metadata: Optional[Dict] = None) -> "BatchJob":
+    def create_batch_job(
+        self, batch_id: str, metadata: Optional[Dict] = None, input_file_id: Optional[str] = None
+    ) -> "BatchJob":
         """Create a new batch job."""
         conn = self._get_connection()
         now = datetime.now(timezone.utc).isoformat()
         metadata_json = json.dumps(metadata) if metadata else None
 
         conn.execute(
-            "INSERT INTO batch_jobs (id, status, metadata, created_at, updated_at) "
-            "VALUES (?, 'pending', ?, ?, ?)",
-            (batch_id, metadata_json, now, now),
+            "INSERT INTO batch_jobs (id, status, metadata, input_file_id, created_at, updated_at) "
+            "VALUES (?, 'pending', ?, ?, ?, ?)",
+            (batch_id, metadata_json, input_file_id, now, now),
         )
         return BatchJob(
             id=batch_id,
             status="pending",
             metadata=metadata,
+            input_file_id=input_file_id,
             created_at=now,
             updated_at=now,
         )
@@ -193,9 +206,61 @@ class Database:
             id=row["id"],
             status=row["status"],
             metadata=metadata,
+            input_file_id=row["input_file_id"] if "input_file_id" in row.keys() else None,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    # -------------------------------------------------------------------------
+    # File Management Operations
+    # -------------------------------------------------------------------------
+
+    def create_file(self, file_id: str, filename: str, bytes_size: int, purpose: str) -> FileObject:
+        """Create a new file record."""
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "INSERT INTO files (id, filename, bytes, purpose, created_at) VALUES (?, ?, ?, ?, ?)",
+            (file_id, filename, bytes_size, purpose, now)
+        )
+        logger.info(f"Created file {file_id}")
+        return FileObject(
+            id=file_id,
+            filename=filename,
+            bytes=bytes_size,
+            purpose=purpose,
+            created_at=now
+        )
+
+    def get_file(self, file_id: str) -> Optional[FileObject]:
+        """Get file by ID."""
+        conn = self._get_connection()
+        row = conn.execute("SELECT * FROM files WHERE id = ?", (file_id,)).fetchone()
+        if not row:
+            return None
+        return FileObject(
+            id=row["id"],
+            filename=row["filename"],
+            bytes=row["bytes"],
+            purpose=row["purpose"],
+            created_at=row["created_at"]
+        )
+
+    def get_all_files(self) -> List[FileObject]:
+        """Get all files."""
+        conn = self._get_connection()
+        rows = conn.execute("SELECT * FROM files ORDER BY created_at DESC").fetchall()
+        return [
+            FileObject(
+                id=row["id"],
+                filename=row["filename"],
+                bytes=row["bytes"],
+                purpose=row["purpose"],
+                created_at=row["created_at"]
+            )
+            for row in rows
+        ]
+
     def __init__(self, db_path: str = "/var/lib/sllm/state.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -256,6 +321,8 @@ class Database:
             self._migrate_v3(conn)
         if from_version < 4:
             self._migrate_v4(conn)
+        if from_version < 5:
+            self._migrate_v5(conn)
 
         # Update schema version
         conn.execute("DELETE FROM schema_version")
@@ -357,6 +424,27 @@ class Database:
         """)
 
         logger.info("Created v4 schema (Batch Support)")
+
+    def _migrate_v5(self, conn: sqlite3.Connection):
+        """Create v5 schema with file management support."""
+        # Files table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS files (
+                id TEXT PRIMARY KEY,
+                filename TEXT NOT NULL,
+                bytes INTEGER NOT NULL,
+                purpose TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        # Alter batch_jobs to add input_file_id (if not exists)
+        try:
+            conn.execute("ALTER TABLE batch_jobs ADD COLUMN input_file_id TEXT")
+        except sqlite3.OperationalError:
+            pass # Column already exists, which is fine
+
+        logger.info("Created v5 schema (File Support)")
 
     # -------------------------------------------------------------------------
     # Deployment CRUD Operations

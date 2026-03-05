@@ -238,3 +238,8 @@ Temporary Items
 *.db
 *.db-shm
 *.db-wal
+
+# Documentation and data files
+*.pdf
+*.md
+*.json

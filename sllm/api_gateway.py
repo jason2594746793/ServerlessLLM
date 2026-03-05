@@ -297,6 +297,73 @@ def create_app(
             )
 
     # -------------------------------------------------------------------------
+    # File Management Endpoints
+    # -------------------------------------------------------------------------
+
+    @app.post("/v1/files")
+    async def upload_file_handler(request: Request):
+        """Upload a file that contains batch requests."""
+        try:
+            form = await request.form()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid form data: {str(e)}")
+            
+        file = form.get("file")
+        purpose = form.get("purpose", "batch")
+        
+        if not file or not hasattr(file, "filename"):
+            raise HTTPException(status_code=400, detail="Missing file in form data")
+            
+        import uuid
+        import os
+        file_id = f"file_{uuid.uuid4().hex[:12]}"
+        
+        # Save file to disk
+        upload_dir = "sllm_files"
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, f"{file_id}.jsonl")
+        
+        file_content = await file.read()
+        
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+            
+        db: Database = request.app.state.database
+        file_obj = db.create_file(
+            file_id=file_id,
+            filename=file.filename,
+            bytes_size=len(file_content),
+            purpose=purpose
+        )
+        
+        return {
+            "id": file_obj.id,
+            "object": "file",
+            "bytes": file_obj.bytes,
+            "created_at": file_obj.created_at,
+            "filename": file_obj.filename,
+            "purpose": file_obj.purpose
+        }
+
+    @app.get("/v1/files")
+    async def list_files_handler(request: Request):
+        db: Database = request.app.state.database
+        files = db.get_all_files()
+        return {
+            "object": "list",
+            "data": [
+                {
+                    "id": f.id,
+                    "object": "file",
+                    "bytes": f.bytes,
+                    "created_at": f.created_at,
+                    "filename": f.filename,
+                    "purpose": f.purpose
+                } for f in files
+            ]
+        }
+
+    # -------------------------------------------------------------------------
     # Batch Job Endpoints
     # -------------------------------------------------------------------------
 
@@ -310,12 +377,44 @@ def create_app(
                 status_code=400, detail=f"Invalid JSON payload: {str(e)}"
             )
 
+        input_file_id = body.get("input_file_id")
         tasks = body.get("tasks")
-        if not tasks or not isinstance(tasks, list):
+        
+        if not input_file_id and not tasks:
             raise HTTPException(
                 status_code=400,
-                detail="Request body must include a 'tasks' list",
+                detail="Request body must include either 'tasks' list or 'input_file_id'",
             )
+
+        import uuid
+        import json
+        import os
+
+        db: Database = request.app.state.database
+        batch_id = f"batch_{uuid.uuid4().hex[:8]}"
+
+        # Handle file-based tasks
+        if input_file_id:
+            logger.info(f"Processing batch from file: {input_file_id}")
+            file_obj = db.get_file(input_file_id)
+            if not file_obj:
+                raise HTTPException(status_code=404, detail=f"File {input_file_id} not found")
+                
+            file_path = f"sllm_files/{input_file_id}.jsonl"
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=500, detail="File content missing on disk")
+                
+            tasks = []
+            line_idx = 0
+            try:
+                with open(file_path, "r") as f:
+                    for line_idx, line in enumerate(f):
+                        line = line.strip()
+                        if not line: continue
+                        task_data = json.loads(line)
+                        tasks.append(task_data)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to parse jsonl file at line {line_idx+1}: {e}")
 
         # Validate tasks
         for task in tasks:
@@ -327,14 +426,9 @@ def create_app(
                     detail="Each task must have custom_id, method, url, and body",
                 )
 
-        import uuid
-
-        db: Database = request.app.state.database
-        batch_id = f"batch_{uuid.uuid4().hex[:8]}"
-
         try:
             # Create batch job
-            db.create_batch_job(batch_id, metadata=body.get("metadata"))
+            db.create_batch_job(batch_id, metadata=body.get("metadata"), input_file_id=input_file_id)
 
             # Create tasks
             for task in tasks:
