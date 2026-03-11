@@ -238,8 +238,34 @@ Temporary Items
 *.db
 *.db-shm
 *.db-wal
+*.db.backup*
 
-# Documentation and data files
+# Thesis and documentation (not part of system code)
+THESIS_OUTLINE*.md
+EXPERIMENT_FINDINGS.md
 *.pdf
-*.md
-*.json
+
+# Experiment results (data, not code)
+results/
+benchmarks/results/
+*.jsonl
+
+# Temp/scratch scripts in root
+fix_thesis_numbers.py
+monitor_experiments.sh
+run_all_experiments.py
+test_autoscaling.py
+test_strategy_api.sh
+requests.jsonl
+test_dataset.jsonl
+
+# Build artifacts and local state
+thesis/
+ug/
+sllm_files/
+*.log
+.claude/
+results_backup*/
+benchmarks/EXPERIMENTS_SUMMARY.md
+benchmarks/VALIDATION_REPORT.md
+example_batch_job.json

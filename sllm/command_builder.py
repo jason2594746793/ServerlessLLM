@@ -64,8 +64,12 @@ def build_vllm_command(
         "--enable-prefix-caching",
     ]
 
-    if max_model_len:
-        cmd_parts.append(f"--max-model-len {max_model_len}")
+    # Default max_model_len to 4096 if not specified.
+    # Many newer models (e.g. Qwen3-8B) default to 40960+ tokens,
+    # which exceeds single-GPU VRAM on A5000 (24GB).
+    if not max_model_len:
+        max_model_len = 4096
+    cmd_parts.append(f"--max-model-len {max_model_len}")
 
     if gpu_memory_utilization:
         cmd_parts.append(f"--gpu-memory-utilization {gpu_memory_utilization}")

@@ -93,10 +93,14 @@ def create_app(
         if router and autoscaler:
             router.set_autoscaler(autoscaler)
 
+        # Connect Scheduler to Autoscaler for proactive scaling
+        if scheduler and autoscaler:
+            scheduler.set_autoscaler(autoscaler)
+
         # Start router if provided
         if router:
             await router.start()
-            
+
         # Start Scheduler if initialized
         if scheduler:
             await scheduler.start()
@@ -379,7 +383,8 @@ def create_app(
 
         input_file_id = body.get("input_file_id")
         tasks = body.get("tasks")
-        
+        completion_window = body.get("completion_window")  # e.g., "1h", "24h"
+
         if not input_file_id and not tasks:
             raise HTTPException(
                 status_code=400,
@@ -427,8 +432,12 @@ def create_app(
                 )
 
         try:
-            # Create batch job
-            db.create_batch_job(batch_id, metadata=body.get("metadata"), input_file_id=input_file_id)
+            # Create batch job with completion_window
+            metadata = body.get("metadata", {})
+            if completion_window:
+                metadata["completion_window"] = completion_window
+
+            db.create_batch_job(batch_id, metadata=metadata, input_file_id=input_file_id)
 
             # Create tasks
             for task in tasks:
@@ -442,7 +451,12 @@ def create_app(
                     body=task["body"],
                 )
 
-            logger.info(f"Created batch job {batch_id} with {len(tasks)} tasks")
+            logger.info(f"Created batch job {batch_id} with {len(tasks)} tasks (completion_window: {completion_window})")
+
+            # Notify scheduler about new batch with deadline
+            scheduler: Optional[BatchScheduler] = request.app.state.scheduler
+            if scheduler and completion_window:
+                await scheduler.handle_batch_with_deadline(batch_id, len(tasks), completion_window)
 
             return {
                 "id": batch_id,
@@ -753,5 +767,51 @@ def create_app(
         )
 
         return {"status": "ok"}
+
+    # ========================================================================
+    # Admin Endpoints for Experiment Control
+    # ========================================================================
+
+    @app.post("/admin/set_strategy")
+    async def set_batch_strategy(request: Request):
+        """Set batch scheduling strategy at runtime (for experiments).
+
+        Body:
+            strategy: "sync", "chunked", or "semaphore"
+            buffer_limit: Concurrency limit (default: 10)
+            enable_model_grouping: Whether to sort tasks by model (default: true)
+        """
+        scheduler = request.app.state.scheduler
+        if not scheduler:
+            raise HTTPException(status_code=503, detail="Batch scheduler not available")
+
+        body = await request.json()
+        strategy = body.get("strategy", "semaphore")
+        buffer_limit = body.get("buffer_limit", 10)
+        enable_model_grouping = body.get("enable_model_grouping", True)
+
+        try:
+            scheduler.set_strategy(strategy, buffer_limit, enable_model_grouping)
+            return {
+                "status": "ok",
+                "strategy": strategy,
+                "buffer_limit": buffer_limit,
+                "enable_model_grouping": enable_model_grouping
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.get("/admin/get_strategy")
+    async def get_batch_strategy(request: Request):
+        """Get current batch scheduling strategy."""
+        scheduler = request.app.state.scheduler
+        if not scheduler:
+            raise HTTPException(status_code=503, detail="Batch scheduler not available")
+
+        return {
+            "strategy": scheduler.strategy,
+            "buffer_limit": scheduler.buffer_limit,
+            "enable_model_grouping": scheduler.enable_model_grouping
+        }
 
     return app
