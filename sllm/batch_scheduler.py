@@ -22,17 +22,38 @@ class BatchScheduler:
         # Track active batches to prevent premature scale-down
         self._active_batch_jobs: set = set()
 
+        # Prevent concurrent processing of same batch
+        self._processing_batches: set = set()
+        self._batch_lock = asyncio.Lock()
+
         # Runtime-configurable scheduling strategy
         self.strategy = "semaphore"  # Options: "sync", "chunked", "semaphore"
         # Read Router's buffer capacity to use as default and ceiling
-        self._router_buffer_size = getattr(self.router.config, 'max_buffer_size', 10)
+        self._router_buffer_size = getattr(self.router.config, 'max_buffer_size', 100)
         self.buffer_limit = self._router_buffer_size
         self.enable_model_grouping = True
+
+        # Checkpoint prefetch configuration
+        self.storage_manager = None     # Will be set by API Gateway
+        self.enable_prefetch = True
+        self.prefetch_threshold = 0.8   # Trigger prefetch when 80% of group done
+
+        # Per-batch concurrency limit (prevents one batch from monopolizing buffer)
+        self.max_concurrent_tasks_per_batch = max(10, self._router_buffer_size // 2)
+
+        # Global concurrency limit across ALL batches
+        # Ensures total in-flight tasks never exceed router capacity
+        self._global_semaphore = asyncio.Semaphore(self._router_buffer_size)
 
     def set_autoscaler(self, autoscaler):
         """Set the AutoScaler reference for proactive scaling."""
         self.autoscaler = autoscaler
         logger.info("BatchScheduler connected to AutoScaler")
+
+    def set_storage_manager(self, storage_manager):
+        """Set the StorageManager reference for checkpoint prefetching."""
+        self.storage_manager = storage_manager
+        logger.info("BatchScheduler connected to StorageManager for prefetch")
 
     def set_strategy(self, strategy: str, buffer_limit: int = 10, enable_model_grouping: bool = True):
         """Set scheduling strategy at runtime without restarting cluster.
@@ -159,7 +180,8 @@ class BatchScheduler:
         logger.info("BatchScheduler started")
 
     async def stop(self):
-        """Stop the scheduler loop."""
+        """Stop the scheduler gracefully, allowing in-flight batches to drain."""
+        logger.info("Stopping BatchScheduler...")
         self.running = False
         if self._loop_task:
             self._loop_task.cancel()
@@ -170,31 +192,45 @@ class BatchScheduler:
         logger.info("BatchScheduler stopped")
 
     async def _schedule_loop(self):
-        """Main scheduling loop."""
+        """Main scheduling loop.
+
+        Launches batch processing tasks concurrently. Does NOT block on
+        completion — new batches are picked up every iteration while
+        existing ones continue running in the background.
+        """
+        background_tasks: set = set()
+
         while self.running:
             try:
-                # 1. Fetch pending jobs
-                # In a real system, we'd query for jobs.
-                # Here, we'll scan all jobs and their tasks pending execution.
-                # For simplicity in this base version, we just loop through *all* tasks 
-                # that are pending and execute them if they have NO dependencies.
-                
-                # Note: This is inefficient but functional for a prototype.
-                # Ideally, we should have specific queries for "ready" tasks.
-                
-                # We need a new DB method: get_pending_tasks()
-                # For now, let's iterate active batches.
                 pending_batch_ids = self.database.get_pending_batch_ids()
-                
-                for batch_id in pending_batch_ids:
-                    await self._process_batch(batch_id)
 
-                await asyncio.sleep(1)  # Interval
+                for batch_id in pending_batch_ids:
+                    async with self._batch_lock:
+                        if batch_id not in self._processing_batches:
+                            self._processing_batches.add(batch_id)
+                            task = asyncio.create_task(self._process_batch_safe(batch_id))
+                            background_tasks.add(task)
+                            task.add_done_callback(background_tasks.discard)
+
+                await asyncio.sleep(1)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in schedule loop: {e}", exc_info=True)
                 await asyncio.sleep(5)
+
+        # On shutdown, wait for in-flight batches to finish
+        if background_tasks:
+            logger.info(f"Waiting for {len(background_tasks)} in-flight batches to finish...")
+            await asyncio.gather(*background_tasks, return_exceptions=True)
+
+    async def _process_batch_safe(self, batch_id: str):
+        """Wrapper to ensure batch is removed from processing set."""
+        try:
+            await self._process_batch(batch_id)
+        finally:
+            async with self._batch_lock:
+                self._processing_batches.discard(batch_id)
 
     async def _process_batch(self, batch_id: str):
         tasks = self.database.get_batch_tasks(batch_id)
@@ -219,6 +255,9 @@ class BatchScheduler:
                              self.autoscaler.unregister_active_batch(deployment_id, batch_id)
             return
 
+        # Mark batch as in_progress to prevent reprocessing
+        self.database.update_batch_job_status(batch_id, 'in_progress')
+
         # --- OPTIMIZATION: Model Grouping (Fusion) ---
         # Sort pending tasks by model name to minimize thrashing.
         if self.enable_model_grouping:
@@ -227,18 +266,34 @@ class BatchScheduler:
         else:
             logger.info(f"Model grouping disabled: preserving original task order")
 
-        # Execute tasks based on selected strategy
+        # === Decide execution path ===
+        # When model grouping is enabled, ALWAYS use group-based execution
+        # so that prefetch vs no-prefetch is a fair comparison.
+        use_prefetch = (
+            self.enable_prefetch
+            and self.enable_model_grouping
+            and self.storage_manager is not None
+        )
+
+        if self.enable_model_grouping:
+            # Group-based execution (sequential groups, concurrent within group)
+            await self._process_with_prefetch(pending_tasks, do_prefetch=use_prefetch)
+        else:
+            await self._process_without_prefetch(pending_tasks)
+
+    # --------------------------------------------------------------------- #
+    #  Non-prefetch path (original logic, unchanged)                         #
+    # --------------------------------------------------------------------- #
+
+    async def _process_without_prefetch(self, pending_tasks: List[BatchTask]):
+        """Execute tasks using the selected strategy without prefetch."""
         if self.strategy == "sync":
-            # --- BASELINE: Synchronous Execution ---
-            # Pros: Zero overhead, deterministic. Cons: No parallelism.
             logger.info(f"Processing {len(pending_tasks)} tasks with SYNC strategy")
             for task in pending_tasks:
                 await self._execute_task(task)
 
         elif self.strategy == "chunked":
-            # --- Chunked Execution ---
-            # Pros: Simple, guarantees no buffer overflow. Cons: Stop-and-wait behavior.
-            chunk_size = max(1, self.buffer_limit)
+            chunk_size = max(1, self.max_concurrent_tasks_per_batch)
             logger.info(f"Processing {len(pending_tasks)} tasks with CHUNKED strategy (chunk_size: {chunk_size})")
             for i in range(0, len(pending_tasks), chunk_size):
                 chunk = pending_tasks[i : i + chunk_size]
@@ -246,25 +301,184 @@ class BatchScheduler:
                 await asyncio.gather(*execution_futures)
 
         else:  # semaphore (default)
-            # --- Async with Semaphore ---
-            # Pros: Smoother flow, max resource utilization. Cons: Complex to tune limit.
-            semaphore = asyncio.Semaphore(self.buffer_limit)
+            semaphore = asyncio.Semaphore(self.max_concurrent_tasks_per_batch)
 
             async def _sem_execute(task):
                 async with semaphore:
                     await self._execute_task(task)
 
-            logger.info(f"Processing {len(pending_tasks)} tasks with SEMAPHORE strategy (limit: {self.buffer_limit})")
+            logger.info(f"Processing {len(pending_tasks)} tasks with SEMAPHORE strategy (limit: {self.max_concurrent_tasks_per_batch})")
             await asyncio.gather(*(_sem_execute(task) for task in pending_tasks))
 
+    # --------------------------------------------------------------------- #
+    #  Prefetch path — group-aware execution with checkpoint pre-loading     #
+    # --------------------------------------------------------------------- #
+
+    async def _process_with_prefetch(self, pending_tasks: List[BatchTask], do_prefetch: bool = True):
+        """Execute tasks grouped by model, optionally prefetching the next model's
+        checkpoint into CPU memory.
+
+        When do_prefetch=False, still uses group-based sequential execution
+        but without triggering any prefetch operations.
+
+        If prefetch_threshold == 0.0:
+            Eagerly read ALL subsequent models into CPU memory right at the start.
+        If prefetch_threshold > 0.0:
+            Wait until threshold% of current tasks are done before fetching the next one.
+        """
+        groups = self._extract_model_groups(pending_tasks)
+        logger.info(
+            f"[PREFETCH] Processing {len(pending_tasks)} tasks "
+            f"(prefetch={'ON' if do_prefetch else 'OFF'}, threshold={self.prefetch_threshold}) in {len(groups)} "
+            f"model groups: {[g[0] for g in groups]}"
+        )
+
+        if do_prefetch and self.prefetch_threshold == 0.0:
+            # === EAGER PREFETCH MODE ===
+            # Kick off background prefetch for *all* models except the first one right away
+            if self.storage_manager and len(groups) > 1:
+                # Use fromkeys to preserve order and avoid duplicates
+                subsequent_models = list(dict.fromkeys(g[0] for g in groups[1:]))
+                for m in subsequent_models:
+                    if m != groups[0][0]:  # Skip the one we are running first
+                        logger.info(f"[PREFETCH_ALL] Eagerly prefetching {m} to CPU right now")
+                        asyncio.create_task(self.storage_manager.prefetch_to_cpu(m))
+            
+            # Now run everything sequentially without threshold tracking
+            for group_idx, (model_name, group_tasks) in enumerate(groups):
+                logger.info(
+                    f"Starting group {group_idx+1}/{len(groups)}: "
+                    f"{model_name} ({len(group_tasks)} tasks) (Eager Mode)"
+                )
+                await self._execute_group(group_tasks)
+                
+        else:
+            # === OVERLAPPING PREFETCH MODE or NO-PREFETCH GROUP MODE ===
+            for group_idx, (model_name, group_tasks) in enumerate(groups):
+                next_model = (
+                    groups[group_idx + 1][0]
+                    if group_idx + 1 < len(groups)
+                    else None
+                )
+
+                logger.info(
+                    f"[PREFETCH] Starting group {group_idx+1}/{len(groups)}: "
+                    f"{model_name} ({len(group_tasks)} tasks)"
+                )
+
+                if do_prefetch and next_model and next_model != model_name:
+                    await self._execute_group_with_prefetch(
+                        group_tasks, next_model, self.prefetch_threshold
+                    )
+                else:
+                    # Last group, same model, or prefetch disabled
+                    await self._execute_group(group_tasks)
+
+    async def _execute_group_with_prefetch(
+        self,
+        tasks: List[BatchTask],
+        next_model: str,
+        threshold: float,
+    ):
+        """Execute one model group and trigger prefetch of *next_model* once
+        *threshold*% of tasks complete.
+
+        Always uses the semaphore strategy internally so we can track
+        individual task completions for the threshold trigger.
+        """
+        prefetch_at = max(1, int(len(tasks) * threshold))
+        prefetch_triggered = False
+        completed_count = 0
+        lock = asyncio.Lock()
+
+        semaphore = asyncio.Semaphore(self.max_concurrent_tasks_per_batch)
+
+        async def _execute_and_track(task):
+            nonlocal completed_count, prefetch_triggered
+
+            async with semaphore:
+                await self._execute_task(task)
+
+            async with lock:
+                completed_count += 1
+
+                if (
+                    not prefetch_triggered
+                    and completed_count >= prefetch_at
+                    and self.storage_manager
+                ):
+                    prefetch_triggered = True
+                    logger.info(
+                        f"[PREFETCH] {completed_count}/{len(tasks)} done "
+                        f"(threshold {threshold:.0%}), prefetching {next_model}"
+                    )
+                    # Fire-and-forget: prefetch runs in background
+                    asyncio.create_task(
+                        self.storage_manager.prefetch_to_cpu(next_model)
+                    )
+
+        await asyncio.gather(*[_execute_and_track(t) for t in tasks])
+
+    async def _execute_group(self, tasks: List[BatchTask]):
+        """Execute a model group using the currently selected strategy
+        (without prefetch tracking).
+        """
+        if self.strategy == "sync":
+            for task in tasks:
+                await self._execute_task(task)
+        elif self.strategy == "chunked":
+            chunk_size = max(1, self.max_concurrent_tasks_per_batch)
+            for i in range(0, len(tasks), chunk_size):
+                chunk = tasks[i : i + chunk_size]
+                await asyncio.gather(*[self._execute_task(t) for t in chunk])
+        else:
+            semaphore = asyncio.Semaphore(self.max_concurrent_tasks_per_batch)
+
+            async def _sem(task):
+                async with semaphore:
+                    await self._execute_task(task)
+
+            await asyncio.gather(*[_sem(t) for t in tasks])
+
+    def _extract_model_groups(self, tasks: List[BatchTask]) -> List[tuple]:
+        """Split sorted task list into per-model groups.
+
+        Args:
+            tasks: Tasks already sorted by model_name.
+
+        Returns:
+            [(model_name, [tasks]), ...] preserving the sorted order.
+
+        Example:
+            Input:  [A, A, A, B, B, C]
+            Output: [("ModelA", [A,A,A]), ("ModelB", [B,B]), ("ModelC", [C])]
+        """
+        groups = []
+        current_model = None
+        current_group = []
+        for task in tasks:
+            model = task.body.get("model", "")
+            if model != current_model:
+                if current_group:
+                    groups.append((current_model, current_group))
+                current_model = model
+                current_group = [task]
+            else:
+                current_group.append(task)
+        if current_group:
+            groups.append((current_model, current_group))
+        return groups
+
     async def _execute_task(self, task: BatchTask):
+        """Execute a single batch task, respecting the global concurrency limit."""
+        async with self._global_semaphore:
+            await self._execute_task_inner(task)
+
+    async def _execute_task_inner(self, task: BatchTask):
         logger.info(f"Executing task {task.id} (Batch: {task.batch_id})")
-        
+
         # Record Start Time
         started_at = datetime.utcnow().isoformat()
-        
-        # Mark as in_progress (optional, but good for visibility)
-        # self.database.upsert_batch_task(task.id, task.batch_id, task.custom_id, task.method, task.url, task.body, status='in_progress', started_at=started_at)
 
         try:
             # 1. Prepare Request
@@ -293,11 +507,24 @@ class BatchScheduler:
             
             # 2. Submit to Router
             # Router.handle_request returns the *result* (JSON dict)
-            result = await self.router.handle_request(
-                payload=task.body,
-                path=task.url,
-                deployment_id=deployment_id
-            )
+            max_retries = 3
+            retry_delay = 1.0
+
+            for attempt in range(max_retries):
+                try:
+                    result = await self.router.handle_request(
+                        payload=task.body,
+                        path=task.url,
+                        deployment_id=deployment_id
+                    )
+                    break
+                except Exception as e:
+                    if "buffer full" in str(e).lower() and attempt < max_retries - 1:
+                        logger.warning(f"Task {task.id} buffer full, retry {attempt+1}/{max_retries} after {retry_delay}s")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise
             
             # 3. Handle Success
             completed_at = datetime.utcnow().isoformat()

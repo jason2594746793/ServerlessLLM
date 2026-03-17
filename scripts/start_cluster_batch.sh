@@ -8,10 +8,16 @@ set -e
 # MPS Workaround (User specific)
 export CUDA_MPS_PIPE_DIRECTORY=/tmp/no_mps_vllm
 
+# Fix: CUDA toolkit stub shadows real driver (since CUDA toolkit update 2026-03-12)
+export LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}
+
+# Activate virtual environment explicitly
+source .venv_new/bin/activate
+
 # Configuration
-PYTHON=.venv/bin/python
-PYLET_BIN=.venv/bin/pylet
-SLLM_BIN=.venv/bin/sllm
+PYTHON=.venv_new/bin/python
+PYLET_BIN=.venv_new/bin/pylet
+SLLM_BIN=.venv_new/bin/sllm
 PORT=8343
 
 echo "=== GPU Configuration ==="
@@ -38,7 +44,8 @@ pkill -f "sllm-store" || true
 sleep 2
 
 mkdir -p $MODELS_DIR
-rm -f $DB_PATH
+rm -f ${DB_PATH}*
+rm -f ~/.pylet/pylet.db*
 
 echo "=== 1. Starting Pylet Head (Cluster Manager) ==="
 $PYLET_BIN start > pylet_head_batch.log 2>&1 &

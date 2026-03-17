@@ -352,20 +352,28 @@ class Router:
                             deployment_id
                         )
                         if endpoints:
-                            try:
-                                request = buffer.get_nowait()
-                                endpoint = self._select_next_endpoint(
-                                    deployment_id, endpoints
-                                )
+                            # Drain as many buffered requests as possible
+                            # in one pass (up to number of endpoints for
+                            # basic load spreading)
+                            drained = 0
+                            while not buffer.empty():
+                                try:
+                                    request = buffer.get_nowait()
+                                    endpoint = self._select_next_endpoint(
+                                        deployment_id, endpoints
+                                    )
+                                    if not request.endpoint_future.done():
+                                        request.endpoint_future.set_result(
+                                            endpoint
+                                        )
+                                    drained += 1
+                                except asyncio.QueueEmpty:
+                                    break
+                            if drained:
                                 logger.info(
-                                    f"[{deployment_id}] Endpoint available, "
-                                    f"unblocking request to {endpoint}"
+                                    f"[{deployment_id}] Drained {drained} "
+                                    f"buffered requests"
                                 )
-                                # Signal endpoint availability (caller forwards)
-                                if not request.endpoint_future.done():
-                                    request.endpoint_future.set_result(endpoint)
-                            except asyncio.QueueEmpty:
-                                pass
 
                 await asyncio.sleep(0.1)
 

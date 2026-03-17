@@ -652,6 +652,55 @@ class Database:
             updated_at=now,
         )
 
+    def create_batch_tasks_bulk(
+        self,
+        tasks: List[Dict],
+        batch_id: str,
+    ) -> int:
+        """Bulk-insert batch tasks in a single transaction.
+
+        Args:
+            tasks: List of dicts with keys: task_id, custom_id, method, url, body
+            batch_id: Parent batch job ID
+
+        Returns:
+            Number of tasks inserted.
+        """
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+
+        rows = [
+            (
+                t["task_id"],
+                batch_id,
+                t["custom_id"],
+                t["method"],
+                t["url"],
+                json.dumps(t["body"]),
+                now,
+                now,
+            )
+            for t in tasks
+        ]
+
+        conn.execute("BEGIN")
+        try:
+            conn.executemany(
+                """
+                INSERT INTO batch_tasks (
+                    id, batch_id, custom_id, method, url, body, status,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                """,
+                rows,
+            )
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+
+        return len(rows)
+
     def upsert_batch_task(
         self,
         task_id: str,

@@ -22,6 +22,9 @@ API_URL = "http://localhost:8343"
 MODEL_SMALL  = "Qwen/Qwen3-0.6B"
 MODEL_MEDIUM = "Qwen/Qwen2.5-7B-Instruct"
 MODEL_LARGE  = "Qwen/Qwen3-8B"
+# Extra‑large model for 32‑B test (requires ~70 GB pinned pool)
+MODEL_XLARGE = "Qwen/Qwen1.5-32B"
+
 
 RESULTS_ROOT = Path(__file__).parent.parent / "results"
 

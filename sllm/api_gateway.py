@@ -97,6 +97,11 @@ def create_app(
         if scheduler and autoscaler:
             scheduler.set_autoscaler(autoscaler)
 
+        # Connect Scheduler to StorageManager for checkpoint prefetch
+        storage_manager = getattr(app.state, "storage_manager", None)
+        if scheduler and storage_manager:
+            scheduler.set_storage_manager(storage_manager)
+
         # Start router if provided
         if router:
             await router.start()
@@ -304,31 +309,48 @@ def create_app(
     # File Management Endpoints
     # -------------------------------------------------------------------------
 
+    MAX_UPLOAD_SIZE = int(os.getenv("SLLM_MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))  # 100MB default
+    MAX_TASKS_PER_BATCH = int(os.getenv("SLLM_MAX_TASKS_PER_BATCH", "50000"))
+
     @app.post("/v1/files")
     async def upload_file_handler(request: Request):
         """Upload a file that contains batch requests."""
+        # Check Content-Length header early to reject oversized uploads
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum upload size is {MAX_UPLOAD_SIZE} bytes"
+            )
+
         try:
             form = await request.form()
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid form data: {str(e)}")
-            
+
         file = form.get("file")
         purpose = form.get("purpose", "batch")
-        
+
         if not file or not hasattr(file, "filename"):
             raise HTTPException(status_code=400, detail="Missing file in form data")
-            
+
         import uuid
-        import os
+        import os as _os
         file_id = f"file_{uuid.uuid4().hex[:12]}"
-        
+
         # Save file to disk
         upload_dir = "sllm_files"
-        os.makedirs(upload_dir, exist_ok=True)
-        file_path = os.path.join(upload_dir, f"{file_id}.jsonl")
-        
+        _os.makedirs(upload_dir, exist_ok=True)
+        file_path = _os.path.join(upload_dir, f"{file_id}.jsonl")
+
         file_content = await file.read()
-        
+
+        if len(file_content) > MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum upload size is {MAX_UPLOAD_SIZE} bytes"
+            )
+
         with open(file_path, "wb") as f:
             f.write(file_content)
             
@@ -422,6 +444,12 @@ def create_app(
                 raise HTTPException(status_code=400, detail=f"Failed to parse jsonl file at line {line_idx+1}: {e}")
 
         # Validate tasks
+        if len(tasks) > MAX_TASKS_PER_BATCH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Too many tasks ({len(tasks)}). Maximum is {MAX_TASKS_PER_BATCH} per batch."
+            )
+
         for task in tasks:
             if not all(
                 k in task for k in ("custom_id", "method", "url", "body")
@@ -439,17 +467,20 @@ def create_app(
 
             db.create_batch_job(batch_id, metadata=metadata, input_file_id=input_file_id)
 
-            # Create tasks
-            for task in tasks:
-                task_id = f"task_{uuid.uuid4().hex[:16]}"
-                db.create_batch_task(
-                    task_id=task_id,
-                    batch_id=batch_id,
-                    custom_id=task["custom_id"],
-                    method=task["method"],
-                    url=task["url"],
-                    body=task["body"],
-                )
+            # Bulk-insert tasks in a single transaction (off event loop)
+            task_rows = [
+                {
+                    "task_id": f"task_{uuid.uuid4().hex[:16]}",
+                    "custom_id": task["custom_id"],
+                    "method": task["method"],
+                    "url": task["url"],
+                    "body": task["body"],
+                }
+                for task in tasks
+            ]
+            await asyncio.get_event_loop().run_in_executor(
+                None, db.create_batch_tasks_bulk, task_rows, batch_id
+            )
 
             logger.info(f"Created batch job {batch_id} with {len(tasks)} tasks (completion_window: {completion_window})")
 
@@ -780,6 +811,8 @@ def create_app(
             strategy: "sync", "chunked", or "semaphore"
             buffer_limit: Concurrency limit (default: 10)
             enable_model_grouping: Whether to sort tasks by model (default: true)
+            enable_prefetch: Whether to prefetch next model checkpoint (default: current)
+            prefetch_threshold: Fraction of group done before prefetch fires (default: current)
         """
         scheduler = request.app.state.scheduler
         if not scheduler:
@@ -790,13 +823,28 @@ def create_app(
         buffer_limit = body.get("buffer_limit", 10)
         enable_model_grouping = body.get("enable_model_grouping", True)
 
+        # Prefetch parameters (preserve current values if not specified)
+        enable_prefetch = body.get("enable_prefetch", scheduler.enable_prefetch)
+        prefetch_threshold = body.get("prefetch_threshold", scheduler.prefetch_threshold)
+
         try:
             scheduler.set_strategy(strategy, buffer_limit, enable_model_grouping)
+
+            # Apply prefetch settings
+            scheduler.enable_prefetch = enable_prefetch
+            scheduler.prefetch_threshold = prefetch_threshold
+            logger.info(
+                f"Prefetch settings: enable={enable_prefetch}, "
+                f"threshold={prefetch_threshold}"
+            )
+
             return {
                 "status": "ok",
                 "strategy": strategy,
                 "buffer_limit": buffer_limit,
-                "enable_model_grouping": enable_model_grouping
+                "enable_model_grouping": enable_model_grouping,
+                "enable_prefetch": enable_prefetch,
+                "prefetch_threshold": prefetch_threshold,
             }
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -811,7 +859,9 @@ def create_app(
         return {
             "strategy": scheduler.strategy,
             "buffer_limit": scheduler.buffer_limit,
-            "enable_model_grouping": scheduler.enable_model_grouping
+            "enable_model_grouping": scheduler.enable_model_grouping,
+            "enable_prefetch": scheduler.enable_prefetch,
+            "prefetch_threshold": scheduler.prefetch_threshold,
         }
 
     return app

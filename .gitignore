@@ -256,8 +256,18 @@ monitor_experiments.sh
 run_all_experiments.py
 test_autoscaling.py
 test_strategy_api.sh
+test_prefetch_manual.py
+prepare_models_for_prefetch.py
 requests.jsonl
 test_dataset.jsonl
+
+# Batch API development artifacts
+models_batch/
+PREFETCH_IMPLEMENTATION_PLAN.md
+benchmarks/exp4_prefetch.py
+benchmarks/exp5_standard_workload.py
+benchmarks/exp6_32b.py
+benchmarks/exp7_stress_test.py
 
 # Build artifacts and local state
 thesis/

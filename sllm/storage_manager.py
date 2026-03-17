@@ -423,6 +423,139 @@ class StorageManager:
         return best_node
 
     # -------------------------------------------------------------------------
+    # Checkpoint Prefetch
+    # -------------------------------------------------------------------------
+
+    async def prefetch_to_cpu(self, model_name: str, node_name: str = None) -> bool:
+        """Prefetch model weights into sllm-store's pinned CPU memory.
+
+        Uses sllm-store's gRPC LoadModelAsync to load weights into the
+        pre-allocated pinned memory pool (cudaHostRegister), enabling
+        fast DMA-based GPU transfers when the model is later needed.
+
+        Falls back to raw file reads if no sllm-store endpoint is available.
+
+        Args:
+            model_name: Model name (e.g. "Qwen/Qwen3-8B").
+            node_name:  Target node. If None, uses first available node.
+
+        Returns:
+            True if prefetch succeeded, False otherwise.
+        """
+        loop = asyncio.get_running_loop()
+        try:
+            # Resolve sllm-store endpoint
+            endpoint = None
+            if node_name:
+                endpoint = await self.get_store_endpoint(node_name)
+            if not endpoint:
+                # Try first available endpoint
+                for ep in self._store_endpoints.values():
+                    endpoint = ep
+                    break
+
+            if endpoint:
+                result = await loop.run_in_executor(
+                    None,
+                    self._prefetch_via_store,
+                    model_name,
+                    endpoint,
+                )
+            else:
+                logger.warning(
+                    f"[PREFETCH] No sllm-store endpoint available, "
+                    f"falling back to raw file read for {model_name}"
+                )
+                result = await loop.run_in_executor(
+                    None,
+                    self._prefetch_raw_read,
+                    model_name,
+                )
+            return result
+        except Exception as e:
+            logger.error(f"[PREFETCH] Error prefetching {model_name}: {e}")
+            return False
+
+    # --- synchronous helpers (executed in thread-pool) ----------------------
+
+    @staticmethod
+    def _prefetch_via_store(model_name: str, endpoint: str) -> bool:
+        """Load model into pinned CPU memory via sllm-store gRPC."""
+        import time
+
+        t0 = time.monotonic()
+        logger.info(
+            f"[PREFETCH] Loading {model_name} into pinned memory "
+            f"via sllm-store at {endpoint}"
+        )
+
+        try:
+            from sllm_store.client import SllmStoreClient
+
+            client = SllmStoreClient(server_address=endpoint)
+            response = client.load_into_cpu(model_name)
+
+            elapsed = time.monotonic() - t0
+            if response is False:
+                logger.error(
+                    f"[PREFETCH] sllm-store failed to load {model_name} "
+                    f"after {elapsed:.1f}s"
+                )
+                return False
+
+            logger.info(
+                f"[PREFETCH] {model_name} loaded into pinned memory "
+                f"via sllm-store ({elapsed:.1f}s)"
+            )
+            return True
+
+        except Exception as e:
+            elapsed = time.monotonic() - t0
+            logger.error(
+                f"[PREFETCH] sllm-store prefetch failed for {model_name} "
+                f"after {elapsed:.1f}s: {e}"
+            )
+            return False
+
+    def _prefetch_raw_read(self, model_name: str) -> bool:
+        """Fallback: read weight files into OS page cache via raw I/O."""
+        import os
+        import time
+
+        t0 = time.monotonic()
+        model_dir = os.path.join(self.storage_path, model_name)
+        logger.info(f"[PREFETCH] Raw-reading weight files from {model_dir}")
+
+        if not os.path.isdir(model_dir):
+            logger.error(f"[PREFETCH] Model directory not found: {model_dir}")
+            return False
+
+        try:
+            total_bytes = 0
+            for fname in os.listdir(model_dir):
+                if fname.endswith((".safetensors", ".bin")):
+                    fpath = os.path.join(model_dir, fname)
+                    with open(fpath, "rb") as f:
+                        while chunk := f.read(64 * 1024 * 1024):  # 64 MB
+                            total_bytes += len(chunk)
+
+            elapsed = time.monotonic() - t0
+            total_gb = total_bytes / (1024 ** 3)
+            logger.info(
+                f"[PREFETCH] Raw-read {model_name} into page cache "
+                f"({total_gb:.1f} GB, {elapsed:.1f}s)"
+            )
+            return True
+
+        except Exception as e:
+            elapsed = time.monotonic() - t0
+            logger.error(
+                f"[PREFETCH] Raw-read failed for {model_name} "
+                f"after {elapsed:.1f}s: {e}"
+            )
+            return False
+
+    # -------------------------------------------------------------------------
     # Utilities
     # -------------------------------------------------------------------------
 
