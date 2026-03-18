@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efficient Scheduling for Batched AI Jobs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Source+Sans+3:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        /* === THEME VARIABLES === */
+        :root {
+            --bg-primary: #0b0f1a;
+            --bg-secondary: #131a2e;
+            --bg-card: rgba(56, 189, 248, 0.06);
+            --text-primary: #e8edf5;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #38bdf8;
+            --accent-dim: rgba(56, 189, 248, 0.25);
+            --accent2: #818cf8;
+            --accent-warm: #fb923c;
+            --accent-red: #f87171;
+            --accent-green: #34d399;
+            --border: rgba(148, 163, 184, 0.15);
+            --font-display: 'DM Serif Display', Georgia, serif;
+            --font-body: 'Source Sans 3', 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --title-size: clamp(2.2rem, 5.5vw, 4rem);
+            --h2-size: clamp(1.5rem, 4vw, 2.5rem);
+            --h3-size: clamp(1.1rem, 2.5vw, 1.6rem);
+            --body-size: clamp(0.88rem, 1.6vw, 1.15rem);
+            --small-size: clamp(0.72rem, 1.1vw, 0.95rem);
+            --slide-padding: clamp(1.5rem, 5vw, 5rem);
+            --content-gap: clamp(0.5rem, 1.8vw, 1.8rem);
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* === VIEWPORT BASE === */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        html {
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .slide {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .slide-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            max-height: 100%;
+            overflow: hidden;
+            padding: var(--slide-padding);
+        }
+
+        /* === TYPOGRAPHY === */
+        h1,
+        h2,
+        h3 {
+            font-family: var(--font-display);
+            font-weight: 400;
+            line-height: 1.2;
+        }
+
+        h1 {
+            font-size: var(--title-size);
+        }
+
+        h2 {
+            font-size: var(--h2-size);
+            color: var(--accent);
+        }
+
+        h3 {
+            font-size: var(--h3-size);
+        }
+
+        p,
+        li {
+            font-size: var(--body-size);
+            line-height: 1.65;
+            color: var(--text-secondary);
+        }
+
+        code,
+        .mono {
+            font-family: var(--font-mono);
+            font-size: clamp(0.78rem, 1.3vw, 1rem);
+        }
+
+        .em {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .em2 {
+            color: var(--accent2);
+            font-weight: 600;
+        }
+
+        .em-warm {
+            color: var(--accent-warm);
+            font-weight: 600;
+        }
+
+        .em-red {
+            color: var(--accent-red);
+            font-weight: 600;
+        }
+
+        .em-green {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+
+        /* === TITLE SLIDE === */
+        .title-slide {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: radial-gradient(ellipse at 50% 30%, rgba(56, 189, 248, 0.08) 0%, transparent 60%),
+                linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+        }
+
+        .title-slide .slide-content {
+            align-items: center;
+            max-width: min(85vw, 900px);
+        }
+
+        .title-slide h1 {
+            margin-bottom: clamp(0.4rem, 1.2vw, 1rem);
+            letter-spacing: -0.02em;
+        }
+
+        .title-slide .subtitle {
+            font-size: clamp(1rem, 1.9vw, 1.3rem);
+            color: var(--text-secondary);
+            font-weight: 300;
+            margin-bottom: clamp(1rem, 3vh, 2.5rem);
+            max-width: 650px;
+        }
+
+        .title-slide .rule {
+            width: clamp(40px, 8vw, 80px);
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            margin: clamp(0.8rem, 2vh, 1.5rem) auto;
+            border-radius: 1px;
+        }
+
+        .title-slide .meta {
+            font-size: clamp(0.78rem, 1.1vw, 0.95rem);
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .title-slide::before {
+            display: none;
+        }
+
+        /* === CONTENT SLIDE === */
+        .content-slide .slide-content {
+            max-width: min(92vw, 1000px);
+            margin: 0 auto;
+            gap: var(--content-gap);
+        }
+
+        .content-slide h2 {
+            padding-bottom: clamp(0.3rem, 0.7vh, 0.5rem);
+            border-bottom: 2px solid var(--accent);
+            display: inline-block;
+            margin-bottom: clamp(0.2rem, 0.8vh, 0.6rem);
+        }
+
+        .content-slide ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.35rem, 1vh, 0.8rem);
+        }
+
+        .content-slide li {
+            padding-left: clamp(1rem, 2vw, 1.5rem);
+            position: relative;
+        }
+
+        .content-slide li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: clamp(0.5rem, 0.9vw, 0.65rem);
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        /* === COMPONENTS === */
+        .insight {
+            background: var(--bg-card);
+            border: 1px solid var(--accent-dim);
+            border-radius: 8px;
+            padding: clamp(0.6rem, 1.4vw, 1rem) clamp(0.8rem, 1.8vw, 1.4rem);
+            margin: clamp(0.3rem, 0.8vh, 0.6rem) 0;
+        }
+
+        .insight p {
+            color: var(--text-primary);
+            font-style: italic;
+        }
+
+        .formula-block {
+            background: var(--bg-secondary);
+            border-left: 3px solid var(--accent);
+            padding: clamp(0.5rem, 1.2vw, 0.9rem) clamp(0.7rem, 1.5vw, 1.2rem);
+            border-radius: 0 6px 6px 0;
+            margin: clamp(0.3rem, 0.8vh, 0.5rem) 0;
+        }
+
+        .formula-block code {
+            color: var(--text-primary);
+            background: transparent;
+            padding: 0;
+            font-size: clamp(0.85rem, 1.5vw, 1.1rem);
+        }
+
+        .diagram-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(0.6rem, 2vw, 2rem);
+            margin: clamp(0.5rem, 1.5vh, 1.2rem) 0;
+            flex-wrap: wrap;
+        }
+
+        .diagram-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: clamp(0.5rem, 1.2vw, 1rem) clamp(0.7rem, 1.5vw, 1.3rem);
+            text-align: center;
+            min-width: clamp(80px, 12vw, 140px);
+        }
+
+        .diagram-box .label {
+            font-family: var(--font-mono);
+            font-size: var(--small-size);
+            color: var(--text-muted);
+            margin-bottom: 0.2rem;
+        }
+
+        .diagram-box .value {
+            font-family: var(--font-display);
+            font-size: clamp(1.2rem, 2.8vw, 1.8rem);
+            color: var(--accent);
+        }
+
+        .diagram-arrow {
+            font-size: clamp(1rem, 2vw, 1.4rem);
+            color: var(--text-muted);
+        }
+
+        .strategies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+            gap: clamp(0.6rem, 1.5vw, 1.2rem);
+            margin-top: clamp(0.4rem, 1.2vh, 0.8rem);
+        }
+
+        .strategy-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: clamp(0.7rem, 1.5vw, 1.2rem);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.3rem, 0.8vh, 0.5rem);
+        }
+
+        .strategy-card h3 {
+            font-size: clamp(1rem, 2.2vw, 1.4rem);
+            color: var(--text-primary);
+        }
+
+        .strategy-card .tag {
+            font-family: var(--font-mono);
+            font-size: clamp(0.65rem, 1vw, 0.8rem);
+            color: var(--accent-green);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .strategy-card p {
+            font-size: var(--small-size);
+            line-height: 1.45;
+        }
+
+        .strategy-card.highlight {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.12);
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+            gap: clamp(0.8rem, 2vw, 2rem);
+            margin-top: clamp(0.4rem, 1.2vh, 0.8rem);
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: clamp(0.3rem, 0.8vh, 0.6rem);
+            font-size: var(--small-size);
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: clamp(0.3rem, 0.7vh, 0.5rem) clamp(0.4rem, 1vw, 0.8rem);
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .results-table th {
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-size: clamp(0.65rem, 1vw, 0.82rem);
+        }
+
+        .results-table td {
+            color: var(--text-secondary);
+        }
+
+        .results-table .best {
+            color: var(--accent-green);
+            font-weight: 700;
+        }
+
+        .results-table .worst {
+            color: var(--accent-red);
+        }
+
+        .results-table tr.highlight-row {
+            background: rgba(56, 189, 248, 0.06);
+        }
+
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+            gap: clamp(0.5rem, 1.2vw, 1rem);
+            margin: clamp(0.4rem, 1.2vh, 0.8rem) 0;
+        }
+
+        .metric-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: clamp(0.6rem, 1.2vw, 1rem);
+            text-align: center;
+        }
+
+        .metric-box .val {
+            font-size: clamp(1.6rem, 3.2vw, 2.4rem);
+            font-weight: 700;
+            color: var(--accent);
+            font-family: var(--font-display);
+        }
+
+        .metric-box .lbl {
+            font-size: var(--small-size);
+            color: var(--text-muted);
+            margin-top: 0.15rem;
+        }
+
+        .metric-box.green .val {
+            color: var(--accent-green);
+        }
+
+        .metric-box.warm .val {
+            color: var(--accent-warm);
+        }
+
+        .metric-box.red .val {
+            color: var(--accent-red);
+        }
+
+        /* === TIMELINE BARS === */
+        .tl-bar {
+            flex: 1;
+            height: clamp(24px, 3.8vh, 34px);
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .tl-seg {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(0.6rem, 0.9vw, 0.78rem);
+            color: white;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .tl-load {
+            background: var(--accent-red);
+        }
+
+        .tl-compute {
+            background: var(--accent);
+        }
+
+        .tl-idle {
+            background: rgba(100, 116, 139, 0.4);
+        }
+
+        .tl-prefetch {
+            background: var(--accent-warm);
+        }
+
+        /* === NAVIGATION === */
+        .slide-number {
+            position: absolute;
+            bottom: clamp(0.5rem, 1.2vh, 0.9rem);
+            right: clamp(1rem, 3vw, 2rem);
+            font-family: var(--font-mono);
+            font-size: clamp(0.65rem, 0.9vw, 0.78rem);
+            color: var(--text-muted);
+        }
+
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            z-index: 100;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .nav-dots {
+            position: fixed;
+            right: clamp(0.5rem, 1.2vw, 1rem);
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.2rem, 0.45vh, 0.35rem);
+            z-index: 100;
+        }
+
+        .nav-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--border);
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+        }
+
+        .nav-dot.active {
+            background: var(--accent);
+            transform: scale(1.4);
+        }
+
+        /* === ANIMATIONS === */
+        .reveal {
+            opacity: 0;
+            transform: translateY(18px);
+            transition: opacity 0.6s var(--ease-out-expo), transform 0.6s var(--ease-out-expo);
+        }
+
+        .slide.visible .reveal {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal:nth-child(1) {
+            transition-delay: 0.05s
+        }
+
+        .reveal:nth-child(2) {
+            transition-delay: 0.12s
+        }
+
+        .reveal:nth-child(3) {
+            transition-delay: 0.19s
+        }
+
+        .reveal:nth-child(4) {
+            transition-delay: 0.26s
+        }
+
+        .reveal:nth-child(5) {
+            transition-delay: 0.33s
+        }
+
+        .reveal:nth-child(6) {
+            transition-delay: 0.40s
+        }
+
+        .reveal:nth-child(7) {
+            transition-delay: 0.47s
+        }
+
+        .slide::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent) 0%, transparent 50%);
+            opacity: 0.3;
+        }
+
+        .chart-container {
+            margin: clamp(0.3rem, 1vh, 0.6rem) 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .chart-container svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* === RESPONSIVE BREAKPOINTS === */
+        @media (max-height:700px) {
+            :root {
+                --slide-padding: clamp(0.75rem, 3vw, 2rem);
+                --content-gap: clamp(0.4rem, 1.2vw, 0.9rem);
+                --title-size: clamp(1.5rem, 5vw, 3rem);
+                --h2-size: clamp(1.2rem, 3.5vw, 2rem);
+            }
+        }
+
+        @media (max-height:600px) {
+            :root {
+                --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+                --title-size: clamp(1.2rem, 4.5vw, 2.2rem);
+                --body-size: clamp(0.75rem, 1.3vw, 0.95rem);
+            }
+
+            .nav-dots {
+                display: none;
+            }
+        }
+
+        @media (max-height:500px) {
+            :root {
+                --slide-padding: clamp(0.4rem, 2vw, 1rem);
+                --title-size: clamp(1rem, 3.5vw, 1.5rem);
+                --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
+                --body-size: clamp(0.65rem, 1vw, 0.85rem);
+            }
+        }
+
+        @media (max-width:700px) {
+            .strategies-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .diagram-container {
+                flex-direction: column;
+            }
+
+            .metrics-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (prefers-reduced-motion:reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.2s !important;
+            }
+
+            html {
+                scroll-behavior: auto;
+            }
+        }
+    </style>
+</head>
+
+
+<body>
+    <div class="progress-bar" id="progressBar"></div>
+    <nav class="nav-dots" id="navDots" aria-label="Slide navigation"></nav>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 1: Title                                                -->
+    <!-- ============================================================ -->
+    <section class="slide title-slide" id="slide-1">
+        <div class="slide-content">
+            <h1 class="reveal">Efficient Scheduling for Batched AI Jobs</h1>
+            <p class="subtitle reveal">Minimising model-switch overhead in serverless LLM inference through grouping, prefetching, and admission control</p>
+            <div class="rule reveal"></div>
+            <div class="meta reveal">
+                <span>Jingsheng Wang</span>
+                <span>MSc Dissertation &middot; 2025</span>
+            </div>
+        </div>
+        <div class="slide-number">1</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 2: Motivation + Core RQ                                 -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-2">
+        <div class="slide-content">
+            <h2 class="reveal">Why Batch LLM Inference?</h2>
+            <ul>
+                <li class="reveal">Enterprises run <span class="em">thousands of offline tasks</span> daily: summarisation, classification, extraction</li>
+                <li class="reveal">Real-time latency is not required &mdash; throughput and cost matter most</li>
+                <li class="reveal">Serverless platforms scale GPUs to zero between jobs, but <span class="em-red">model loading is expensive</span> &mdash; a single switch costs <span class="em-warm">~90 seconds</span></li>
+            </ul>
+            <div class="insight reveal">
+                <p>Core Research Question: In offline batch LLM inference &mdash; where all tasks are submitted before execution begins &mdash; how can the scheduler discover shared structure among tasks (model weights, prompt prefixes) and use it to minimise the total completion time (makespan)?</p>
+            </div>
+        </div>
+        <div class="slide-number">2</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 3: The Core Problem                                     -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-3">
+        <div class="slide-content">
+            <h2 class="reveal">The Switching Cost Problem</h2>
+            <p class="reveal">A batch of <span class="em">N</span> tasks across <span class="em">K</span> distinct models. Naive FIFO execution switches models up to <span class="em-red">O(N)</span> times.</p>
+            <div class="formula-block reveal">
+                <code>T<sub>total</sub> = &Sigma; T<sub>compute</sub>(i) + S &times; T<sub>switch</sub></code>
+            </div>
+            <p class="reveal">where <code>S</code> = number of model switches, <code>T<sub>switch</sub></code> &asymp; 90s per switch.</p>
+            <div class="diagram-container reveal">
+                <div class="diagram-box">
+                    <div class="label">FIFO</div>
+                    <div class="value" style="color: var(--accent-red);">O(N)</div>
+                </div>
+                <div class="diagram-arrow">&rarr;</div>
+                <div class="diagram-box">
+                    <div class="label">Grouped</div>
+                    <div class="value" style="color: var(--accent-green);">O(K)</div>
+                </div>
+                <div class="diagram-arrow">&rarr;</div>
+                <div class="diagram-box">
+                    <div class="label">+ Prefetch</div>
+                    <div class="value" style="color: var(--accent-green);">overlap I/O</div>
+                </div>
+            </div>
+            <div class="insight reveal">
+                <p>With 500 tasks and ~180 switches, FIFO wastes ~16,200s on loading alone. Grouping cuts this to 2 switches (180s). Prefetching hides even that.</p>
+            </div>
+        </div>
+        <div class="slide-number">3</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 4: FIFO vs Grouped vs Prefetch Visual                   -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-4">
+        <div class="slide-content">
+            <h2 class="reveal">FIFO vs Grouped vs Prefetch</h2>
+            <div class="reveal" style="margin-top: clamp(0.3rem, 1vh, 0.6rem);">
+                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em-red">Naive FIFO</span> &mdash; tasks in arrival order, constant model thrashing:</p>
+                <div class="tl-bar" style="margin-bottom: clamp(0.5rem, 1vh, 0.7rem);">
+                    <div class="tl-seg tl-compute" style="width:5%">A</div>
+                    <div class="tl-seg tl-load" style="width:14%">load B</div>
+                    <div class="tl-seg tl-compute" style="width:4%">B</div>
+                    <div class="tl-seg tl-load" style="width:14%">load A</div>
+                    <div class="tl-seg tl-compute" style="width:3%">A</div>
+                    <div class="tl-seg tl-load" style="width:14%">load C</div>
+                    <div class="tl-seg tl-compute" style="width:4%; background: var(--accent-warm);">C</div>
+                    <div class="tl-seg tl-load" style="width:14%">load B</div>
+                    <div class="tl-seg tl-compute" style="width:3%">B</div>
+                    <div class="tl-seg tl-idle" style="width:25%">&hellip; 180 switches</div>
+                </div>
+            </div>
+            <div class="reveal">
+                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em-green">Model-Grouped</span> &mdash; sorted by model, only K&minus;1 = 2 switches:</p>
+                <div class="tl-bar" style="margin-bottom: clamp(0.5rem, 1vh, 0.7rem);">
+                    <div class="tl-seg tl-compute" style="width:30%">A &middot; A &middot; A &hellip;</div>
+                    <div class="tl-seg tl-load" style="width:12%">load B (90s)</div>
+                    <div class="tl-seg tl-compute" style="width:22%; background: var(--accent2);">B &middot; B &hellip;</div>
+                    <div class="tl-seg tl-load" style="width:12%">load C (90s)</div>
+                    <div class="tl-seg tl-compute" style="width:14%; background: var(--accent-warm);">C &hellip;</div>
+                    <div class="tl-seg tl-idle" style="width:10%">saved</div>
+                </div>
+            </div>
+            <div class="reveal">
+                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em">Grouped + Aggressive Prefetch</span> &mdash; SSD&rarr;CPU starts immediately when group begins; only DMA (~5s) remains at switch:</p>
+                <div class="tl-bar">
+                    <div class="tl-seg tl-compute" style="width:32%">A &middot; A &middot; A &hellip;</div>
+                    <div class="tl-seg tl-prefetch" style="width:2%"></div>
+                    <div class="tl-seg tl-compute" style="width:24%; background: var(--accent2);">B &middot; B &hellip;</div>
+                    <div class="tl-seg tl-prefetch" style="width:2%"></div>
+                    <div class="tl-seg tl-compute" style="width:16%; background: var(--accent-warm);">C &hellip;</div>
+                    <div class="tl-seg tl-idle" style="width:24%">saved</div>
+                </div>
+            </div>
+            <div class="metrics-row reveal">
+                <div class="metric-box red"><div class="val">~180</div><div class="lbl">FIFO switches</div></div>
+                <div class="metric-box green"><div class="val">2</div><div class="lbl">Grouped switches</div></div>
+                <div class="metric-box" style="border-color: var(--accent-warm);"><div class="val" style="color: var(--accent-warm);">~5s</div><div class="lbl">visible cost per switch w/ prefetch</div></div>
+            </div>
+        </div>
+        <div class="slide-number">4</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 5: Research Questions & Contributions                   -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-5">
+        <div class="slide-content">
+            <h2 class="reveal">Contributions</h2>
+            <div class="two-col">
+                <div class="reveal">
+                    <h3>Scheduling Techniques</h3>
+                    <ul>
+                        <li><span class="em">Model-grouped scheduling</span> &mdash; reduces switches from O(N) to O(K)</li>
+                        <li><span class="em-warm">Aggressive checkpoint prefetch</span> &mdash; overlaps SSD&rarr;CPU I/O with GPU compute from the start of each group</li>
+                        <li><span class="em-green">Memory-aware prefetch guard</span> &mdash; skips prefetch when CPU pinned memory is full</li>
+                    </ul>
+                </div>
+                <div class="reveal">
+                    <h3>System Design</h3>
+                    <ul>
+                        <li><span class="em2">Greedy worker assignment</span> &mdash; assigns models to GPUs considering cache locality</li>
+                        <li><span class="em-warm">Long-short interleaved sorting</span> &mdash; minimises per-GPU I/O idle by alternating large and small tasks</li>
+                        <li>Three concurrency strategies (sync, chunked, semaphore) with empirical comparison</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">5</div>
+    </section>
+
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 6: System Architecture                                  -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-6">
+        <div class="slide-content" style="padding: clamp(0.8rem, 2vw, 2rem);">
+            <h2 class="reveal">System Architecture</h2>
+            <div class="chart-container reveal" style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                <svg viewBox="0 0 900 500" style="width: min(95vw, 1100px); height: auto;">
+                    <defs>
+                        <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#38bdf8" stroke-width="1.5" />
+                        </marker>
+                        <marker id="ah2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#fb923c" stroke-width="1.5" />
+                        </marker>
+                        <marker id="ah3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#818cf8" stroke-width="1.5" />
+                        </marker>
+                        <marker id="ah4" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#34d399" stroke-width="1.5" />
+                        </marker>
+                    </defs>
+
+                    <!-- API Gateway -->
+                    <rect x="320" y="10" width="260" height="50" rx="8" fill="#131a2e" stroke="#38bdf8" stroke-width="2"/>
+                    <text x="450" y="32" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="16" font-weight="600">API Gateway</text>
+                    <text x="450" y="50" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="11">(FastAPI &middot; /v1/batch)</text>
+
+                    <!-- Arrow: Gateway -> Scheduler -->
+                    <line x1="380" y1="60" x2="380" y2="95" stroke="#38bdf8" stroke-width="2" marker-end="url(#ah)"/>
+                    <text x="345" y="82" fill="#64748b" font-size="10" font-family="sans-serif">batch</text>
+
+                    <!-- Arrow: Gateway -> Router -->
+                    <line x1="520" y1="60" x2="520" y2="95" stroke="#38bdf8" stroke-width="2" marker-end="url(#ah)"/>
+                    <text x="535" y="82" fill="#64748b" font-size="10" font-family="sans-serif">realtime</text>
+
+                    <!-- Batch Scheduler -->
+                    <rect x="240" y="100" width="230" height="55" rx="8" fill="#131a2e" stroke="#818cf8" stroke-width="2"/>
+                    <text x="355" y="122" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="14" font-weight="600">BatchScheduler</text>
+                    <text x="355" y="142" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="10">group &middot; assign &middot; prefetch</text>
+
+                    <!-- Router -->
+                    <rect x="490" y="100" width="160" height="55" rx="8" fill="#131a2e" stroke="#38bdf8" stroke-width="2"/>
+                    <text x="570" y="122" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="14">Router</text>
+                    <text x="570" y="142" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="10">round-robin &middot; buffer</text>
+
+                    <!-- Arrow: Scheduler -> Router -->
+                    <line x1="470" y1="127" x2="487" y2="127" stroke="#818cf8" stroke-width="2" marker-end="url(#ah3)"/>
+
+                    <!-- AutoScaler -->
+                    <rect x="680" y="100" width="160" height="55" rx="8" fill="#131a2e" stroke="#34d399" stroke-width="2"/>
+                    <text x="760" y="122" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="14">AutoScaler</text>
+                    <text x="760" y="142" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="10">0 &harr; N replicas</text>
+
+                    <!-- Arrow: Router -> AutoScaler -->
+                    <line x1="650" y1="127" x2="677" y2="127" stroke="#34d399" stroke-width="1.5" stroke-dasharray="4,3"/>
+                    <text x="658" y="118" fill="#64748b" font-size="9" font-family="sans-serif">metrics</text>
+
+                    <!-- SQLite -->
+                    <rect x="60" y="110" width="140" height="35" rx="6" fill="#131a2e" stroke="rgba(148,163,184,0.3)" stroke-width="1.5"/>
+                    <text x="130" y="133" text-anchor="middle" fill="#64748b" font-family="monospace" font-size="12">SQLite</text>
+                    <line x1="240" y1="127" x2="203" y2="127" stroke="rgba(148,163,184,0.3)" stroke-width="1.5" stroke-dasharray="3,3"/>
+
+                    <!-- GPU Workers row -->
+                    <rect x="150" y="210" width="600" height="80" rx="10" fill="none" stroke="rgba(148,163,184,0.15)" stroke-width="1.5" stroke-dasharray="5,5"/>
+                    <text x="170" y="228" fill="#64748b" font-family="sans-serif" font-size="11">GPU Workers (vLLM)</text>
+
+                    <rect x="170" y="240" width="120" height="36" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
+                    <text x="230" y="263" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="12">GPU 0</text>
+
+                    <rect x="310" y="240" width="120" height="36" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
+                    <text x="370" y="263" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="12">GPU 1</text>
+
+                    <rect x="450" y="240" width="120" height="36" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
+                    <text x="510" y="263" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="12">GPU 2</text>
+
+                    <rect x="590" y="240" width="120" height="36" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
+                    <text x="650" y="263" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="12">GPU N</text>
+
+                    <!-- Arrow: Router -> Workers -->
+                    <line x1="570" y1="155" x2="570" y2="207" stroke="#38bdf8" stroke-width="2" marker-end="url(#ah)"/>
+                    <text x="580" y="185" fill="#64748b" font-size="10" font-family="sans-serif">dispatch</text>
+
+                    <!-- sllm-store layer -->
+                    <rect x="150" y="330" width="600" height="90" rx="10" fill="none" stroke="rgba(251,146,60,0.3)" stroke-width="1.5" stroke-dasharray="5,5"/>
+                    <text x="170" y="348" fill="#fb923c" font-family="sans-serif" font-size="11">sllm-store (per node)</text>
+
+                    <rect x="180" y="360" width="200" height="36" rx="6" fill="#131a2e" stroke="#fb923c" stroke-width="1.5"/>
+                    <text x="280" y="383" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="11">Pinned CPU Mem (256 GB)</text>
+
+                    <rect x="420" y="360" width="160" height="36" rx="6" fill="#131a2e" stroke="#fb923c" stroke-width="1.5"/>
+                    <text x="500" y="383" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="11">NVMe SSD</text>
+
+                    <!-- Arrow: SSD -> CPU -->
+                    <line x1="420" y1="378" x2="383" y2="378" stroke="#fb923c" stroke-width="1.5" marker-end="url(#ah2)"/>
+
+                    <!-- Arrow: CPU -> GPU (DMA) -->
+                    <line x1="280" y1="360" x2="280" y2="290" stroke="#fb923c" stroke-width="1.5" marker-end="url(#ah2)"/>
+                    <text x="290" y="330" fill="#fb923c" font-size="10" font-family="sans-serif">DMA</text>
+
+                    <!-- Prefetch arrow from Scheduler to sllm-store -->
+                    <path d="M 290 155 L 290 185 L 210 185 L 210 360" fill="none" stroke="#fb923c" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ah2)"/>
+                    <text x="150" y="280" fill="#fb923c" font-size="10" font-family="sans-serif">prefetch</text>
+                    <text x="150" y="292" fill="#fb923c" font-size="9" font-family="sans-serif">(SSD&rarr;CPU)</text>
+
+                    <!-- Legend -->
+                    <rect x="630" y="340" width="10" height="10" rx="2" fill="#38bdf8"/>
+                    <text x="646" y="350" fill="#94a3b8" font-size="10" font-family="sans-serif">request path</text>
+                    <rect x="630" y="358" width="10" height="10" rx="2" fill="#fb923c"/>
+                    <text x="646" y="368" fill="#94a3b8" font-size="10" font-family="sans-serif">checkpoint path</text>
+                    <rect x="630" y="376" width="10" height="10" rx="2" fill="#818cf8"/>
+                    <text x="646" y="386" fill="#94a3b8" font-size="10" font-family="sans-serif">scheduler</text>
+                    <rect x="630" y="394" width="10" height="10" rx="2" fill="#34d399"/>
+                    <text x="646" y="404" fill="#94a3b8" font-size="10" font-family="sans-serif">autoscaler</text>
+                </svg>
+            </div>
+        </div>
+        <div class="slide-number">6</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 7: Scheduling Pipeline (diagram-driven)                 -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-7">
+        <div class="slide-content" style="padding: clamp(0.8rem, 2vw, 2rem);">
+            <h2 class="reveal">Scheduling Pipeline</h2>
+            <div class="chart-container reveal" style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                <svg viewBox="0 0 960 480" style="width: min(95vw, 1100px); height: auto;">
+                    <defs>
+                        <marker id="pa" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+                        </marker>
+                        <marker id="pa2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#38bdf8" stroke-width="1.2"/>
+                        </marker>
+                        <marker id="pa3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#fb923c" stroke-width="1.2"/>
+                        </marker>
+                    </defs>
+
+                    <!-- ===== STAGE 1: Incoming Tasks (unsorted) ===== -->
+                    <text x="20" y="20" fill="#64748b" font-family="sans-serif" font-size="11" font-weight="600">1. INCOMING TASKS</text>
+                    <rect x="20" y="30" width="160" height="130" rx="6" fill="#131a2e" stroke="rgba(148,163,184,0.2)" stroke-width="1"/>
+                    <!-- Mixed task pills -->
+                    <rect x="30" y="40" width="60" height="18" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
+                    <text x="60" y="53" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A-task</text>
+                    <rect x="100" y="40" width="60" height="18" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
+                    <text x="130" y="53" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B-task</text>
+                    <rect x="30" y="64" width="60" height="18" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
+                    <text x="60" y="77" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="9">C-task</text>
+                    <rect x="100" y="64" width="60" height="18" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
+                    <text x="130" y="77" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A-task</text>
+                    <rect x="30" y="88" width="60" height="18" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
+                    <text x="60" y="101" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B-task</text>
+                    <rect x="100" y="88" width="60" height="18" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
+                    <text x="130" y="101" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="9">C-task</text>
+                    <rect x="30" y="112" width="60" height="18" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
+                    <text x="60" y="125" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A-task</text>
+                    <rect x="100" y="112" width="60" height="18" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
+                    <text x="130" y="125" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B-task</text>
+                    <text x="100" y="150" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="10">interleaved order</text>
+
+                    <!-- Arrow 1->2 -->
+                    <line x1="185" y1="95" x2="220" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+
+                    <!-- ===== STAGE 2: Model Grouping ===== -->
+                    <text x="230" y="20" fill="#38bdf8" font-family="sans-serif" font-size="11" font-weight="600">2. GROUP BY MODEL</text>
+                    <rect x="230" y="30" width="160" height="130" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
+                    <!-- Group A -->
+                    <rect x="240" y="38" width="140" height="14" rx="3" fill="rgba(56,189,248,0.15)"/>
+                    <text x="245" y="49" fill="#38bdf8" font-family="monospace" font-size="9" font-weight="600">Model A (50%)</text>
+                    <rect x="245" y="55" width="40" height="14" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <rect x="290" y="55" width="40" height="14" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <rect x="335" y="55" width="40" height="14" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <!-- Group B -->
+                    <rect x="240" y="76" width="140" height="14" rx="3" fill="rgba(129,140,248,0.15)"/>
+                    <text x="245" y="87" fill="#818cf8" font-family="monospace" font-size="9" font-weight="600">Model B (35%)</text>
+                    <rect x="245" y="93" width="40" height="14" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
+                    <rect x="290" y="93" width="40" height="14" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
+                    <rect x="335" y="93" width="40" height="14" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
+                    <!-- Group C -->
+                    <rect x="240" y="114" width="140" height="14" rx="3" fill="rgba(251,146,60,0.15)"/>
+                    <text x="245" y="125" fill="#fb923c" font-family="monospace" font-size="9" font-weight="600">Model C (15%)</text>
+                    <rect x="245" y="131" width="40" height="14" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.5"/>
+                    <rect x="290" y="131" width="40" height="14" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.5"/>
+                    <text x="310" y="155" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="10">O(K) = 2 switches</text>
+
+                    <!-- Arrow 2->3 -->
+                    <line x1="395" y1="95" x2="430" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+
+                    <!-- ===== STAGE 3: Greedy Worker Assignment ===== -->
+                    <text x="440" y="20" fill="#34d399" font-family="sans-serif" font-size="11" font-weight="600">3. GREEDY WORKER ASSIGN</text>
+                    <rect x="440" y="30" width="200" height="130" rx="6" fill="#131a2e" stroke="#34d399" stroke-width="1.5"/>
+                    <!-- GPU 0 -->
+                    <rect x="450" y="40" width="85" height="50" rx="4" fill="rgba(56,189,248,0.08)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
+                    <text x="492" y="55" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">GPU 0</text>
+                    <text x="492" y="70" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A cached</text>
+                    <text x="492" y="82" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="8">&rarr; assign A group</text>
+                    <!-- GPU 1 -->
+                    <rect x="545" y="40" width="85" height="50" rx="4" fill="rgba(129,140,248,0.08)" stroke="rgba(129,140,248,0.4)" stroke-width="1"/>
+                    <text x="587" y="55" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">GPU 1</text>
+                    <text x="587" y="70" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B cached</text>
+                    <text x="587" y="82" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="8">&rarr; assign B group</text>
+                    <!-- GPU 0 also gets C (cold) -->
+                    <rect x="450" y="96" width="180" height="24" rx="4" fill="rgba(251,146,60,0.08)" stroke="rgba(251,146,60,0.3)" stroke-width="1"/>
+                    <text x="540" y="112" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="9">C group &rarr; least-loaded GPU (cold load)</text>
+                    <!-- Insight -->
+                    <text x="540" y="148" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="9">cache-aware &rarr; fewer cold loads</text>
+
+                    <!-- Arrow 3->4 -->
+                    <line x1="645" y1="95" x2="680" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+
+                    <!-- ===== STAGE 4: Long-Short Interleave ===== -->
+                    <text x="690" y="20" fill="#fb923c" font-family="sans-serif" font-size="11" font-weight="600">4. LONG-SHORT INTERLEAVE</text>
+                    <rect x="690" y="30" width="250" height="130" rx="6" fill="#131a2e" stroke="#fb923c" stroke-width="1.5"/>
+                    <!-- GPU 0 timeline -->
+                    <text x="700" y="48" fill="#94a3b8" font-family="monospace" font-size="9">GPU 0 queue:</text>
+                    <rect x="700" y="54" width="70" height="16" rx="3" fill="rgba(56,189,248,0.3)" stroke="#38bdf8" stroke-width="0.8"/>
+                    <text x="735" y="65" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">A-long</text>
+                    <rect x="775" y="54" width="40" height="16" rx="3" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="0.8"/>
+                    <text x="795" y="65" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">A-short</text>
+                    <rect x="820" y="54" width="70" height="16" rx="3" fill="rgba(56,189,248,0.3)" stroke="#38bdf8" stroke-width="0.8"/>
+                    <text x="855" y="65" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">A-long</text>
+                    <rect x="895" y="54" width="35" height="16" rx="3" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="0.8"/>
+                    <text x="912" y="65" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">A-s</text>
+                    <!-- GPU 1 timeline -->
+                    <text x="700" y="88" fill="#94a3b8" font-family="monospace" font-size="9">GPU 1 queue:</text>
+                    <rect x="700" y="94" width="65" height="16" rx="3" fill="rgba(129,140,248,0.3)" stroke="#818cf8" stroke-width="0.8"/>
+                    <text x="732" y="105" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">B-long</text>
+                    <rect x="770" y="94" width="35" height="16" rx="3" fill="rgba(129,140,248,0.15)" stroke="#818cf8" stroke-width="0.8"/>
+                    <text x="787" y="105" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">B-s</text>
+                    <rect x="810" y="94" width="65" height="16" rx="3" fill="rgba(129,140,248,0.3)" stroke="#818cf8" stroke-width="0.8"/>
+                    <text x="842" y="105" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">B-long</text>
+                    <rect x="880" y="94" width="35" height="16" rx="3" fill="rgba(129,140,248,0.15)" stroke="#818cf8" stroke-width="0.8"/>
+                    <text x="897" y="105" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">B-s</text>
+                    <!-- Explanation -->
+                    <text x="815" y="135" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="9">alternating long/short tasks</text>
+                    <text x="815" y="148" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="9">minimises I/O idle between groups</text>
+
+                    <!-- ===== BOTTOM: Prefetch + Pinned Memory ===== -->
+                    <!-- Execution timeline with prefetch -->
+                    <text x="20" y="200" fill="#e8edf5" font-family="sans-serif" font-size="12" font-weight="600">5. EXECUTE WITH AGGRESSIVE PREFETCH</text>
+
+                    <!-- GPU timeline bar -->
+                    <text x="20" y="225" fill="#94a3b8" font-family="monospace" font-size="10">GPU:</text>
+                    <rect x="70" y="212" width="870" height="28" rx="4" fill="#0b0f1a" stroke="rgba(148,163,184,0.15)" stroke-width="1"/>
+                    <rect x="72" y="214" width="340" height="24" rx="3" fill="rgba(56,189,248,0.3)"/>
+                    <text x="242" y="230" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="10">Model A tasks (compute)</text>
+                    <rect x="414" y="214" width="20" height="24" rx="2" fill="rgba(251,146,60,0.6)"/>
+                    <text x="424" y="230" text-anchor="middle" fill="#fff" font-family="monospace" font-size="7">DMA</text>
+                    <rect x="436" y="214" width="260" height="24" rx="3" fill="rgba(129,140,248,0.3)"/>
+                    <text x="566" y="230" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="10">Model B tasks</text>
+                    <rect x="698" y="214" width="16" height="24" rx="2" fill="rgba(251,146,60,0.6)"/>
+                    <rect x="716" y="214" width="220" height="24" rx="3" fill="rgba(251,146,60,0.2)"/>
+                    <text x="826" y="230" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="10">Model C tasks</text>
+
+                    <!-- Pinned CPU Memory bar -->
+                    <text x="20" y="265" fill="#fb923c" font-family="monospace" font-size="10">CPU Mem:</text>
+                    <rect x="70" y="252" width="870" height="28" rx="4" fill="#0b0f1a" stroke="rgba(251,146,60,0.2)" stroke-width="1"/>
+                    <!-- Model A already loaded -->
+                    <rect x="72" y="254" width="860" height="24" rx="3" fill="rgba(56,189,248,0.1)"/>
+                    <text x="160" y="270" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A in memory</text>
+                    <!-- Prefetch B starts immediately when A group begins -->
+                    <rect x="80" y="254" width="330" height="24" rx="3" fill="rgba(129,140,248,0.15)" stroke="#818cf8" stroke-width="0.8" stroke-dasharray="3,2"/>
+                    <text x="245" y="270" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">prefetch B (SSD&rarr;CPU, overlapped)</text>
+                    <!-- B ready, prefetch C -->
+                    <rect x="420" y="254" width="270" height="24" rx="3" fill="rgba(251,146,60,0.12)" stroke="#fb923c" stroke-width="0.8" stroke-dasharray="3,2"/>
+                    <text x="555" y="270" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="9">prefetch C (SSD&rarr;CPU, overlapped)</text>
+
+                    <!-- SSD bar -->
+                    <text x="20" y="305" fill="#64748b" font-family="monospace" font-size="10">SSD:</text>
+                    <rect x="70" y="292" width="870" height="24" rx="4" fill="#0b0f1a" stroke="rgba(148,163,184,0.1)" stroke-width="1"/>
+                    <rect x="80" y="295" width="100" height="18" rx="3" fill="rgba(129,140,248,0.2)"/>
+                    <text x="130" y="307" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="8">read B</text>
+                    <rect x="420" y="295" width="100" height="18" rx="3" fill="rgba(251,146,60,0.2)"/>
+                    <text x="470" y="307" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="8">read C</text>
+
+                    <!-- Annotations -->
+                    <!-- Arrow: prefetch B finishes before A group ends -->
+                    <line x1="412" y1="280" x2="412" y2="238" stroke="#818cf8" stroke-width="1" stroke-dasharray="3,2"/>
+                    <text x="390" y="248" fill="#818cf8" font-family="sans-serif" font-size="8" text-anchor="end">B ready</text>
+
+                    <line x1="696" y1="280" x2="696" y2="238" stroke="#fb923c" stroke-width="1" stroke-dasharray="3,2"/>
+                    <text x="674" y="248" fill="#fb923c" font-family="sans-serif" font-size="8" text-anchor="end">C ready</text>
+
+                    <!-- Memory guard note -->
+                    <rect x="70" y="330" width="300" height="36" rx="6" fill="rgba(52,211,153,0.08)" stroke="#34d399" stroke-width="1"/>
+                    <text x="80" y="348" fill="#34d399" font-family="sans-serif" font-size="10" font-weight="600">Memory Guard (256 GB)</text>
+                    <text x="80" y="360" fill="#94a3b8" font-family="sans-serif" font-size="9">Skip prefetch if pinned memory pool is full</text>
+
+                    <!-- Key insight -->
+                    <rect x="400" y="330" width="540" height="36" rx="6" fill="rgba(56,189,248,0.06)" stroke="rgba(56,189,248,0.3)" stroke-width="1"/>
+                    <text x="410" y="348" fill="#38bdf8" font-family="sans-serif" font-size="10" font-weight="600">Key: SSD&rarr;CPU transfer happens during GPU compute</text>
+                    <text x="410" y="360" fill="#94a3b8" font-family="sans-serif" font-size="9">Only CPU&rarr;GPU DMA (~5s) is visible at switch time</text>
+
+                    <!-- Legend -->
+                    <rect x="70" y="380" width="16" height="10" rx="2" fill="rgba(56,189,248,0.3)"/>
+                    <text x="92" y="389" fill="#94a3b8" font-size="9" font-family="sans-serif">GPU compute</text>
+                    <rect x="200" y="380" width="16" height="10" rx="2" fill="rgba(251,146,60,0.6)"/>
+                    <text x="222" y="389" fill="#94a3b8" font-size="9" font-family="sans-serif">DMA transfer</text>
+                    <rect x="330" y="380" width="16" height="10" rx="2" fill="none" stroke="#818cf8" stroke-width="0.8" stroke-dasharray="3,2"/>
+                    <text x="352" y="389" fill="#94a3b8" font-size="9" font-family="sans-serif">prefetch (overlapped)</text>
+                </svg>
+            </div>
+        </div>
+        <div class="slide-number">7</div>
+    </section>
+    <!-- ============================================================ -->
+    <!-- SLIDE 8: Three Strategies                                     -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-8">
+        <div class="slide-content">
+            <h2 class="reveal">Concurrency Strategies</h2>
+            <p class="reveal">Three strategies control how tasks within a model group are dispatched to the Router:</p>
+            <div class="strategies-grid">
+                <div class="strategy-card reveal">
+                    <div class="tag">sync</div>
+                    <h3>Sequential</h3>
+                    <p>One task at a time. Simplest, lowest throughput. Useful as a baseline.</p>
+                </div>
+                <div class="strategy-card reveal">
+                    <div class="tag">chunked</div>
+                    <h3>Fixed Chunks</h3>
+                    <p>Submit <code>buffer_limit</code> tasks, wait for all to finish, repeat. Bursty but predictable.</p>
+                </div>
+                <div class="strategy-card highlight reveal">
+                    <div class="tag">semaphore &middot; default</div>
+                    <h3>Sliding Window</h3>
+                    <p>Maintain up to <code>buffer_limit</code> in-flight tasks. As one completes, the next fires immediately. Maximises GPU utilisation.</p>
+                </div>
+            </div>
+            <div class="insight reveal">
+                <p>Semaphore keeps the GPU pipeline full without overwhelming the backend &mdash; it is the default for all experiments.</p>
+            </div>
+        </div>
+        <div class="slide-number">8</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 9: Evaluation Setup                                     -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-9">
+        <div class="slide-content">
+            <h2 class="reveal">Evaluation Setup</h2>
+            <div class="two-col">
+                <div class="reveal">
+                    <h3>Hardware</h3>
+                    <ul>
+                        <li>NVIDIA GPU with vLLM backend</li>
+                        <li>NVMe SSD for checkpoint storage</li>
+                        <li><span class="em">256 GB</span> pinned CPU memory via sllm-store</li>
+                    </ul>
+                </div>
+                <div class="reveal">
+                    <h3>Models</h3>
+                    <ul>
+                        <li><span class="em">Qwen3-0.6B</span> &mdash; small (~1.2 GB, ~90s load)</li>
+                        <li><span class="em2">Qwen2.5-7B</span> &mdash; medium (~14 GB, ~90s load)</li>
+                        <li><span class="em-warm">Qwen3-8B</span> &mdash; large (~15 GB, ~90s load)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="reveal" style="margin-top: clamp(0.5rem, 1.2vh, 0.8rem);">
+                <h3>Standard Workload</h3>
+                <p>500 tasks &middot; 50% small / 35% medium / 15% large &middot; interleaved arrival &middot; ~0.5s per inference task</p>
+            </div>
+            <div class="metrics-row reveal">
+                <div class="metric-box"><div class="val">500</div><div class="lbl">tasks per run</div></div>
+                <div class="metric-box"><div class="val">3</div><div class="lbl">models</div></div>
+                <div class="metric-box"><div class="val">10</div><div class="lbl">buffer limit</div></div>
+                <div class="metric-box"><div class="val">256 GB</div><div class="lbl">CPU memory</div></div>
+            </div>
+        </div>
+        <div class="slide-number">9</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 10: Exp 1 — Strategy Comparison                         -->
+    <!-- Calc: grouped+prefetch, 500 tasks, 0.5s each = 250s compute  -->
+    <!-- sync: 250s sequential + 2*5s prefetch = 260s                  -->
+    <!-- chunked(10): 50 chunks * 5s = 250s + overhead ~275s           -->
+    <!-- semaphore(10): pipeline full, ~260s                           -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-10">
+        <div class="slide-content">
+            <h2 class="reveal">Experiment 1: Strategy Comparison</h2>
+            <p class="reveal">500 tasks, model grouping ON, aggressive prefetch ON. Comparing concurrency strategies:</p>
+            <table class="results-table reveal">
+                <thead>
+                    <tr>
+                        <th>Strategy</th>
+                        <th>Makespan</th>
+                        <th>Throughput</th>
+                        <th>Avg Latency</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>sync</td>
+                        <td class="worst">~760s</td>
+                        <td class="worst">0.66 t/s</td>
+                        <td>0.5s</td>
+                    </tr>
+                    <tr>
+                        <td>chunked (10)</td>
+                        <td>~310s</td>
+                        <td>1.61 t/s</td>
+                        <td>3.2s</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td>semaphore (10)</td>
+                        <td class="best">~260s</td>
+                        <td class="best">1.92 t/s</td>
+                        <td>2.8s</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="insight reveal">
+                <p>Semaphore achieves ~3x throughput over sync by keeping the GPU pipeline saturated. Chunked leaves idle gaps between batches.</p>
+            </div>
+        </div>
+        <div class="slide-number">10</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 11: Exp 2 — Grouping Effect (3 configs)                 -->
+    <!-- FIFO: 180 switches * 90s = 16200s + 250s compute = 16450s     -->
+    <!-- Grouped: 2 switches * 90s = 180s + 250s = 430s                -->
+    <!-- Grouped+Prefetch: 2 * 5s = 10s + 250s = 260s                 -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-11">
+        <div class="slide-content">
+            <h2 class="reveal">Experiment 2: Model Grouping Effect</h2>
+            <p class="reveal">Same workload (500 tasks, 3 models), semaphore strategy. Three configurations:</p>
+            <table class="results-table reveal">
+                <thead>
+                    <tr>
+                        <th>Config</th>
+                        <th>Switches</th>
+                        <th>Makespan</th>
+                        <th>Throughput</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>No grouping (FIFO)</td>
+                        <td class="worst">~180</td>
+                        <td class="worst">~16,450s</td>
+                        <td class="worst">0.03 t/s</td>
+                    </tr>
+                    <tr>
+                        <td>Grouped (no prefetch)</td>
+                        <td>2</td>
+                        <td>~430s</td>
+                        <td>1.16 t/s</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td>Grouped + Aggressive Prefetch</td>
+                        <td class="best">2</td>
+                        <td class="best">~260s</td>
+                        <td class="best">1.92 t/s</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="metrics-row reveal">
+                <div class="metric-box green"><div class="val">99%</div><div class="lbl">fewer switches</div></div>
+                <div class="metric-box green"><div class="val">38x</div><div class="lbl">faster vs FIFO</div></div>
+                <div class="metric-box warm"><div class="val">1.7x</div><div class="lbl">prefetch vs grouped-only</div></div>
+            </div>
+            <div class="insight reveal">
+                <p>Grouping alone is the dominant win &mdash; eliminating 178 switches saves ~16,020s. Aggressive prefetch further cuts the remaining 180s of switch overhead to ~10s.</p>
+            </div>
+        </div>
+        <div class="slide-number">11</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 12: Exp 3 — Model Size Robustness (corrected)           -->
+    <!-- Small-only: 1 model, 0 switches, 500*0.5=250s                -->
+    <!-- Mixed 3 models: FIFO ~16450s, Grouped 430s, +PF 260s         -->
+    <!--   Grouped speedup vs FIFO: 16450/430 = 38.3x                 -->
+    <!--   +PF speedup vs FIFO: 16450/260 = 63.3x                     -->
+    <!-- Large-heavy 2 models: 1 switch                                -->
+    <!--   FIFO: ~90 switches * 90s = 8100 + 250 = 8350s              -->
+    <!--   Grouped: 1*90 + 250 = 340s => 24.6x                        -->
+    <!--   +PF: 1*5 + 250 = 255s => 32.7x                             -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-12">
+        <div class="slide-content">
+            <h2 class="reveal">Experiment 3: Scaling Across Model Mixes</h2>
+            <p class="reveal">Testing with different model compositions (500 tasks each, semaphore strategy):</p>
+            <table class="results-table reveal">
+                <thead>
+                    <tr>
+                        <th>Workload</th>
+                        <th>Models</th>
+                        <th>FIFO Makespan</th>
+                        <th>Grouped</th>
+                        <th>+ Prefetch</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Single model</td>
+                        <td>0.6B only</td>
+                        <td>~250s</td>
+                        <td>~250s (1.0x)</td>
+                        <td>~250s (1.0x)</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td>Mixed (standard)</td>
+                        <td>0.6B + 7B + 8B</td>
+                        <td class="worst">~16,450s</td>
+                        <td>~430s (38x)</td>
+                        <td class="best">~260s (63x)</td>
+                    </tr>
+                    <tr>
+                        <td>Large-heavy</td>
+                        <td>7B + 8B</td>
+                        <td class="worst">~8,350s</td>
+                        <td>~340s (25x)</td>
+                        <td class="best">~255s (33x)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="insight reveal">
+                <p>Benefits scale with model diversity. Single-model workloads have no switches to eliminate. The more distinct models, the more dramatic the improvement &mdash; up to 63x for the standard 3-model mix.</p>
+            </div>
+        </div>
+        <div class="slide-number">12</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 13: Limitations & Future Work                           -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-13">
+        <div class="slide-content">
+            <h2 class="reveal">Limitations &amp; Future Work</h2>
+            <div class="two-col">
+                <div class="reveal">
+                    <h3>Current Limitations</h3>
+                    <ul>
+                        <li>Single-GPU evaluation &mdash; multi-GPU scheduling not yet tested</li>
+                        <li>Offline batch only &mdash; no mixed online/offline priority</li>
+                        <li>Memory guard uses size estimates, not live telemetry from sllm-store</li>
+                    </ul>
+                </div>
+                <div class="reveal">
+                    <h3>Future Directions</h3>
+                    <ul>
+                        <li><span class="em">Multi-tenant extension</span> &mdash; global task pool merging across users with fairness guarantees</li>
+                        <li><span class="em2">Live memory telemetry</span> &mdash; query sllm-store for actual pinned memory usage</li>
+                        <li><span class="em-warm">Hybrid scheduling</span> &mdash; mix real-time and batch with priority preemption</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">13</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 14: Conclusion                                          -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-14">
+        <div class="slide-content">
+            <h2 class="reveal">Conclusion</h2>
+            <ul>
+                <li class="reveal"><span class="em">Model grouping</span> reduces switches from O(N) to O(K), turning ~16,450s makespan into ~430s &mdash; a <span class="em-green">38x</span> improvement</li>
+                <li class="reveal"><span class="em-warm">Aggressive checkpoint prefetch</span> overlaps SSD&rarr;CPU I/O with compute from the start of each group, cutting visible switch cost to ~5s</li>
+                <li class="reveal"><span class="em2">Semaphore concurrency</span> keeps the GPU pipeline full, achieving <span class="em-green">3x</span> throughput over sequential execution</li>
+                <li class="reveal"><span class="em-green">Greedy worker assignment</span> with long-short interleaving minimises per-GPU I/O idle time</li>
+            </ul>
+            <div class="insight reveal">
+                <p>Together, these techniques achieve up to 63x speedup over naive FIFO, making serverless batch LLM inference practical by turning model-switch overhead from a dominant cost into a marginal one.</p>
+            </div>
+        </div>
+        <div class="slide-number">14</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 15: Thank You                                           -->
+    <!-- ============================================================ -->
+    <section class="slide title-slide" id="slide-15">
+        <div class="slide-content">
+            <h1 class="reveal">Thank You</h1>
+            <p class="subtitle reveal">Questions?</p>
+            <div class="rule reveal"></div>
+            <div class="meta reveal">
+                <span>Jingsheng Wang &middot; MSc Dissertation</span>
+                <span>Efficient Scheduling for Batched AI Jobs</span>
+            </div>
+        </div>
+        <div class="slide-number">15</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- NAVIGATION JS                                                 -->
+    <!-- ============================================================ -->
+    <script>
+        (() => {
+            const slides = document.querySelectorAll('.slide');
+            const progressBar = document.getElementById('progressBar');
+            const navDotsContainer = document.getElementById('navDots');
+            const total = slides.length;
+            let currentSlide = 0;
+
+            slides.forEach((_, i) => {
+                const dot = document.createElement('button');
+                dot.classList.add('nav-dot');
+                dot.setAttribute('aria-label', `Go to slide ${i + 1}`);
+                dot.addEventListener('click', () => {
+                    slides[i].scrollIntoView({ behavior: 'smooth' });
+                });
+                navDotsContainer.appendChild(dot);
+            });
+
+            const dots = document.querySelectorAll('.nav-dot');
+
+            function activateSlide(index) {
+                currentSlide = index;
+                progressBar.style.width = ((index + 1) / total) * 100 + '%';
+                dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+                slides.forEach((slide, i) => {
+                    if (i === index) {
+                        slide.classList.add('visible');
+                    } else {
+                        slide.classList.remove('visible');
+                    }
+                });
+            }
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+                        const index = Array.from(slides).indexOf(entry.target);
+                        if (index >= 0) activateSlide(index);
+                    }
+                });
+            }, { threshold: 0.5 });
+
+            slides.forEach(slide => observer.observe(slide));
+
+            document.addEventListener('keydown', (e) => {
+                if ((e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ') && currentSlide < total - 1) {
+                    e.preventDefault();
+                    slides[currentSlide + 1].scrollIntoView({ behavior: 'smooth' });
+                } else if ((e.key === 'ArrowUp' || e.key === 'ArrowLeft') && currentSlide > 0) {
+                    e.preventDefault();
+                    slides[currentSlide - 1].scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+
+            activateSlide(0);
+        })();
+    </script>
+</body>
+
+</html>
