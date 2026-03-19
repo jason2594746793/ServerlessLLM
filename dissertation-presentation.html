@@ -658,7 +658,8 @@
             <h2 class="reveal">Why Batch LLM Inference?</h2>
             <ul>
                 <li class="reveal">Enterprises run <span class="em">thousands of offline tasks</span> daily: summarisation, classification, extraction</li>
-                <li class="reveal">Real-time latency is not required &mdash; throughput and cost matter most</li>
+                <li class="reveal">Researchers submit <span class="em2">large-scale benchmarks</span> across multiple models &mdash; evaluation suites, leaderboard runs, ablation studies</li>
+                <li class="reveal">Real-time latency is not required &mdash; <span class="em">throughput and cost</span> matter most</li>
                 <li class="reveal">Serverless platforms scale GPUs to zero between jobs, but <span class="em-red">model loading is expensive</span> &mdash; a single switch costs <span class="em-warm">~90 seconds</span></li>
             </ul>
             <div class="insight reveal">
@@ -904,196 +905,258 @@
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 7: Scheduling Pipeline (diagram-driven)                 -->
+    <!-- SLIDE 7: Scheduling Pipeline (stages 1-5)                    -->
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-7">
         <div class="slide-content" style="padding: clamp(0.8rem, 2vw, 2rem);">
             <h2 class="reveal">Scheduling Pipeline</h2>
             <div class="chart-container reveal" style="flex: 1; display: flex; align-items: center; justify-content: center;">
-                <svg viewBox="0 0 960 480" style="width: min(95vw, 1100px); height: auto;">
+                <svg viewBox="0 0 960 520" style="width: min(95vw, 1200px); height: auto;">
                     <defs>
                         <marker id="pa" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
                             <path d="M0,0 L8,3 L0,6" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
                         </marker>
-                        <marker id="pa2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#38bdf8" stroke-width="1.2"/>
-                        </marker>
-                        <marker id="pa3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#fb923c" stroke-width="1.2"/>
-                        </marker>
                     </defs>
 
                     <!-- ===== STAGE 1: Incoming Tasks (unsorted) ===== -->
-                    <text x="20" y="20" fill="#64748b" font-family="sans-serif" font-size="11" font-weight="600">1. INCOMING TASKS</text>
-                    <rect x="20" y="30" width="160" height="130" rx="6" fill="#131a2e" stroke="rgba(148,163,184,0.2)" stroke-width="1"/>
-                    <!-- Mixed task pills -->
-                    <rect x="30" y="40" width="60" height="18" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
-                    <text x="60" y="53" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A-task</text>
-                    <rect x="100" y="40" width="60" height="18" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
-                    <text x="130" y="53" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B-task</text>
-                    <rect x="30" y="64" width="60" height="18" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
-                    <text x="60" y="77" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="9">C-task</text>
-                    <rect x="100" y="64" width="60" height="18" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
-                    <text x="130" y="77" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A-task</text>
-                    <rect x="30" y="88" width="60" height="18" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
-                    <text x="60" y="101" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B-task</text>
-                    <rect x="100" y="88" width="60" height="18" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
-                    <text x="130" y="101" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="9">C-task</text>
-                    <rect x="30" y="112" width="60" height="18" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
-                    <text x="60" y="125" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A-task</text>
-                    <rect x="100" y="112" width="60" height="18" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
-                    <text x="130" y="125" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B-task</text>
-                    <text x="100" y="150" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="10">interleaved order</text>
+                    <text x="10" y="28" fill="#64748b" font-family="sans-serif" font-size="13" font-weight="600">1. INCOMING</text>
+                    <rect x="10" y="40" width="150" height="150" rx="6" fill="#131a2e" stroke="rgba(148,163,184,0.2)" stroke-width="1"/>
+                    <rect x="20" y="50" width="58" height="20" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
+                    <text x="49" y="64" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="10">A</text>
+                    <rect x="84" y="50" width="58" height="20" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
+                    <text x="113" y="64" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="10">B</text>
+                    <rect x="20" y="74" width="58" height="20" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
+                    <text x="49" y="88" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="10">C</text>
+                    <rect x="84" y="74" width="58" height="20" rx="4" fill="rgba(52,211,153,0.2)" stroke="#34d399" stroke-width="1"/>
+                    <text x="113" y="88" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="10">D</text>
+                    <rect x="20" y="98" width="58" height="20" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
+                    <text x="49" y="112" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="10">A</text>
+                    <rect x="84" y="98" width="58" height="20" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
+                    <text x="113" y="112" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="10">C</text>
+                    <rect x="20" y="122" width="58" height="20" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
+                    <text x="49" y="136" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="10">B</text>
+                    <rect x="84" y="122" width="58" height="20" rx="4" fill="rgba(244,114,182,0.2)" stroke="#f472b6" stroke-width="1"/>
+                    <text x="113" y="136" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="10">E</text>
+                    <text x="85" y="178" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="10">interleaved</text>
 
                     <!-- Arrow 1->2 -->
-                    <line x1="185" y1="95" x2="220" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+                    <line x1="165" y1="115" x2="192" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
 
                     <!-- ===== STAGE 2: Model Grouping ===== -->
-                    <text x="230" y="20" fill="#38bdf8" font-family="sans-serif" font-size="11" font-weight="600">2. GROUP BY MODEL</text>
-                    <rect x="230" y="30" width="160" height="130" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
-                    <!-- Group A -->
-                    <rect x="240" y="38" width="140" height="14" rx="3" fill="rgba(56,189,248,0.15)"/>
-                    <text x="245" y="49" fill="#38bdf8" font-family="monospace" font-size="9" font-weight="600">Model A (50%)</text>
-                    <rect x="245" y="55" width="40" height="14" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
-                    <rect x="290" y="55" width="40" height="14" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
-                    <rect x="335" y="55" width="40" height="14" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
-                    <!-- Group B -->
-                    <rect x="240" y="76" width="140" height="14" rx="3" fill="rgba(129,140,248,0.15)"/>
-                    <text x="245" y="87" fill="#818cf8" font-family="monospace" font-size="9" font-weight="600">Model B (35%)</text>
-                    <rect x="245" y="93" width="40" height="14" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
-                    <rect x="290" y="93" width="40" height="14" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
-                    <rect x="335" y="93" width="40" height="14" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
-                    <!-- Group C -->
-                    <rect x="240" y="114" width="140" height="14" rx="3" fill="rgba(251,146,60,0.15)"/>
-                    <text x="245" y="125" fill="#fb923c" font-family="monospace" font-size="9" font-weight="600">Model C (15%)</text>
-                    <rect x="245" y="131" width="40" height="14" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.5"/>
-                    <rect x="290" y="131" width="40" height="14" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.5"/>
-                    <text x="310" y="155" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="10">O(K) = 2 switches</text>
+                    <text x="202" y="28" fill="#38bdf8" font-family="sans-serif" font-size="13" font-weight="600">2. GROUP BY MODEL</text>
+                    <rect x="202" y="40" width="160" height="150" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
+                    <rect x="212" y="50" width="140" height="14" rx="3" fill="rgba(56,189,248,0.15)"/>
+                    <text x="216" y="61" fill="#38bdf8" font-family="monospace" font-size="8" font-weight="600">A (200 tasks)</text>
+                    <rect x="216" y="66" width="28" height="10" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <rect x="248" y="66" width="28" height="10" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <rect x="280" y="66" width="28" height="10" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <rect x="212" y="80" width="140" height="14" rx="3" fill="rgba(129,140,248,0.15)"/>
+                    <text x="216" y="91" fill="#818cf8" font-family="monospace" font-size="8" font-weight="600">B (150 tasks)</text>
+                    <rect x="216" y="96" width="28" height="10" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
+                    <rect x="248" y="96" width="28" height="10" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
+                    <rect x="212" y="110" width="140" height="14" rx="3" fill="rgba(251,146,60,0.15)"/>
+                    <text x="216" y="121" fill="#fb923c" font-family="monospace" font-size="8" font-weight="600">C (100 tasks)</text>
+                    <rect x="216" y="126" width="28" height="10" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.5"/>
+                    <rect x="212" y="140" width="140" height="14" rx="3" fill="rgba(52,211,153,0.15)"/>
+                    <text x="216" y="151" fill="#34d399" font-family="monospace" font-size="8" font-weight="600">D (50)</text>
+                    <rect x="212" y="158" width="140" height="14" rx="3" fill="rgba(244,114,182,0.15)"/>
+                    <text x="216" y="169" fill="#f472b6" font-family="monospace" font-size="8" font-weight="600">E (40)</text>
+                    <text x="282" y="185" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="10">O(K) model switches</text>
 
                     <!-- Arrow 2->3 -->
-                    <line x1="395" y1="95" x2="430" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+                    <line x1="367" y1="115" x2="394" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
 
-                    <!-- ===== STAGE 3: Greedy Worker Assignment ===== -->
-                    <text x="440" y="20" fill="#34d399" font-family="sans-serif" font-size="11" font-weight="600">3. GREEDY WORKER ASSIGN</text>
-                    <rect x="440" y="30" width="200" height="130" rx="6" fill="#131a2e" stroke="#34d399" stroke-width="1.5"/>
-                    <!-- GPU 0 -->
-                    <rect x="450" y="40" width="85" height="50" rx="4" fill="rgba(56,189,248,0.08)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
-                    <text x="492" y="55" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">GPU 0</text>
-                    <text x="492" y="70" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A cached</text>
-                    <text x="492" y="82" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="8">&rarr; assign A group</text>
-                    <!-- GPU 1 -->
-                    <rect x="545" y="40" width="85" height="50" rx="4" fill="rgba(129,140,248,0.08)" stroke="rgba(129,140,248,0.4)" stroke-width="1"/>
-                    <text x="587" y="55" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">GPU 1</text>
-                    <text x="587" y="70" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B cached</text>
-                    <text x="587" y="82" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="8">&rarr; assign B group</text>
-                    <!-- GPU 0 also gets C (cold) -->
-                    <rect x="450" y="96" width="180" height="24" rx="4" fill="rgba(251,146,60,0.08)" stroke="rgba(251,146,60,0.3)" stroke-width="1"/>
-                    <text x="540" y="112" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="9">C group &rarr; least-loaded GPU (cold load)</text>
-                    <!-- Insight -->
-                    <text x="540" y="148" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="9">cache-aware &rarr; fewer cold loads</text>
+                    <!-- ===== STAGE 3: Johnson's Rule (expanded) ===== -->
+                    <text x="404" y="28" fill="#f87171" font-family="sans-serif" font-size="13" font-weight="600">3. JOHNSON'S RULE</text>
+                    <rect x="404" y="40" width="200" height="150" rx="6" fill="#131a2e" stroke="#f87171" stroke-width="1.5"/>
+
+                    <!-- Two-machine mapping -->
+                    <text x="414" y="56" fill="#94a3b8" font-family="sans-serif" font-size="8">Two-machine flow-shop:</text>
+                    <text x="414" y="68" fill="#38bdf8" font-family="monospace" font-size="7">Machine A = I/O (SSD&rarr;CPU)</text>
+                    <text x="414" y="79" fill="#a78bfa" font-family="monospace" font-size="7">Machine B = GPU compute</text>
+
+                    <!-- S1 partition -->
+                    <text x="414" y="98" fill="#f87171" font-family="monospace" font-size="8" font-weight="600">S1: P&#x1D62; &ge; I&#x1D62;  sort by I&#x1D62; &uarr;</text>
+                    <rect x="414" y="103" width="50" height="16" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.8"/>
+                    <text x="439" y="114" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="8">A</text>
+                    <rect x="468" y="103" width="50" height="16" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.8"/>
+                    <text x="493" y="114" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="8">B</text>
+                    <rect x="522" y="103" width="50" height="16" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.8"/>
+                    <text x="547" y="114" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="8">C</text>
+
+                    <!-- S2 partition -->
+                    <text x="414" y="134" fill="#f87171" font-family="monospace" font-size="8" font-weight="600">S2: P&#x1D62; &lt; I&#x1D62;  sort by I&#x1D62; &darr;</text>
+                    <rect x="414" y="139" width="50" height="16" rx="3" fill="rgba(52,211,153,0.25)" stroke="#34d399" stroke-width="0.8"/>
+                    <text x="439" y="150" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="8">D</text>
+                    <rect x="468" y="139" width="50" height="16" rx="3" fill="rgba(244,114,182,0.25)" stroke="#f472b6" stroke-width="0.8"/>
+                    <text x="493" y="150" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="8">E</text>
+
+                    <!-- Result order -->
+                    <text x="504" y="175" text-anchor="middle" fill="#f87171" font-family="sans-serif" font-size="9" font-weight="600">Order: A &rarr; B &rarr; C &rarr; D &rarr; E</text>
+                    <text x="504" y="186" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="8">optimal for two-stage overlap</text>
 
                     <!-- Arrow 3->4 -->
-                    <line x1="645" y1="95" x2="680" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+                    <line x1="609" y1="115" x2="636" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
 
-                    <!-- ===== STAGE 4: Long-Short Interleave ===== -->
-                    <text x="690" y="20" fill="#fb923c" font-family="sans-serif" font-size="11" font-weight="600">4. LONG-SHORT INTERLEAVE</text>
-                    <rect x="690" y="30" width="250" height="130" rx="6" fill="#131a2e" stroke="#fb923c" stroke-width="1.5"/>
-                    <!-- GPU 0 timeline -->
-                    <text x="700" y="48" fill="#94a3b8" font-family="monospace" font-size="9">GPU 0 queue:</text>
-                    <rect x="700" y="54" width="70" height="16" rx="3" fill="rgba(56,189,248,0.3)" stroke="#38bdf8" stroke-width="0.8"/>
-                    <text x="735" y="65" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">A-long</text>
-                    <rect x="775" y="54" width="40" height="16" rx="3" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="0.8"/>
-                    <text x="795" y="65" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">A-short</text>
-                    <rect x="820" y="54" width="70" height="16" rx="3" fill="rgba(56,189,248,0.3)" stroke="#38bdf8" stroke-width="0.8"/>
-                    <text x="855" y="65" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">A-long</text>
-                    <rect x="895" y="54" width="35" height="16" rx="3" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="0.8"/>
-                    <text x="912" y="65" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">A-s</text>
-                    <!-- GPU 1 timeline -->
-                    <text x="700" y="88" fill="#94a3b8" font-family="monospace" font-size="9">GPU 1 queue:</text>
-                    <rect x="700" y="94" width="65" height="16" rx="3" fill="rgba(129,140,248,0.3)" stroke="#818cf8" stroke-width="0.8"/>
-                    <text x="732" y="105" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">B-long</text>
-                    <rect x="770" y="94" width="35" height="16" rx="3" fill="rgba(129,140,248,0.15)" stroke="#818cf8" stroke-width="0.8"/>
-                    <text x="787" y="105" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">B-s</text>
-                    <rect x="810" y="94" width="65" height="16" rx="3" fill="rgba(129,140,248,0.3)" stroke="#818cf8" stroke-width="0.8"/>
-                    <text x="842" y="105" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="8">B-long</text>
-                    <rect x="880" y="94" width="35" height="16" rx="3" fill="rgba(129,140,248,0.15)" stroke="#818cf8" stroke-width="0.8"/>
-                    <text x="897" y="105" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">B-s</text>
-                    <!-- Explanation -->
-                    <text x="815" y="135" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="9">alternating long/short tasks</text>
-                    <text x="815" y="148" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="9">minimises I/O idle between groups</text>
+                    <!-- ===== STAGE 4: Greedy Worker Assignment ===== -->
+                    <text x="646" y="28" fill="#34d399" font-family="sans-serif" font-size="13" font-weight="600">4. WORKER ASSIGN</text>
+                    <rect x="646" y="40" width="140" height="150" rx="6" fill="#131a2e" stroke="#34d399" stroke-width="1.5"/>
+                    <rect x="656" y="52" width="120" height="34" rx="4" fill="rgba(56,189,248,0.08)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
+                    <text x="716" y="66" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">GPU 0</text>
+                    <text x="716" y="80" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A + C</text>
+                    <rect x="656" y="92" width="120" height="34" rx="4" fill="rgba(129,140,248,0.08)" stroke="rgba(129,140,248,0.4)" stroke-width="1"/>
+                    <text x="716" y="106" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">GPU 1</text>
+                    <text x="716" y="120" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B + D + E</text>
+                    <text x="716" y="148" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="9">greedy by total time</text>
+                    <text x="716" y="160" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="8">cache-aware placement</text>
 
-                    <!-- ===== BOTTOM: Prefetch + Pinned Memory ===== -->
-                    <!-- Execution timeline with prefetch -->
-                    <text x="20" y="200" fill="#e8edf5" font-family="sans-serif" font-size="12" font-weight="600">5. EXECUTE WITH AGGRESSIVE PREFETCH</text>
+                    <!-- Arrow 4->5 -->
+                    <line x1="791" y1="115" x2="818" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
 
-                    <!-- GPU timeline bar -->
-                    <text x="20" y="225" fill="#94a3b8" font-family="monospace" font-size="10">GPU:</text>
-                    <rect x="70" y="212" width="870" height="28" rx="4" fill="#0b0f1a" stroke="rgba(148,163,184,0.15)" stroke-width="1"/>
-                    <rect x="72" y="214" width="340" height="24" rx="3" fill="rgba(56,189,248,0.3)"/>
-                    <text x="242" y="230" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="10">Model A tasks (compute)</text>
-                    <rect x="414" y="214" width="20" height="24" rx="2" fill="rgba(251,146,60,0.6)"/>
-                    <text x="424" y="230" text-anchor="middle" fill="#fff" font-family="monospace" font-size="7">DMA</text>
-                    <rect x="436" y="214" width="260" height="24" rx="3" fill="rgba(129,140,248,0.3)"/>
-                    <text x="566" y="230" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="10">Model B tasks</text>
-                    <rect x="698" y="214" width="16" height="24" rx="2" fill="rgba(251,146,60,0.6)"/>
-                    <rect x="716" y="214" width="220" height="24" rx="3" fill="rgba(251,146,60,0.2)"/>
-                    <text x="826" y="230" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="10">Model C tasks</text>
+                    <!-- ===== STAGE 5: Long-Short Interleave ===== -->
+                    <text x="828" y="28" fill="#fb923c" font-family="sans-serif" font-size="13" font-weight="600">5. LONG-SHORT</text>
+                    <rect x="828" y="40" width="120" height="150" rx="6" fill="#131a2e" stroke="#fb923c" stroke-width="1.5"/>
+                    <text x="836" y="58" fill="#94a3b8" font-family="monospace" font-size="9">GPU 0:</text>
+                    <rect x="836" y="62" width="48" height="14" rx="3" fill="rgba(56,189,248,0.3)" stroke="#38bdf8" stroke-width="0.8"/>
+                    <text x="860" y="72" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">A-L</text>
+                    <rect x="888" y="62" width="22" height="14" rx="3" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="0.8"/>
+                    <text x="899" y="72" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="6">s</text>
+                    <rect x="914" y="62" width="28" height="14" rx="3" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="0.8"/>
+                    <text x="928" y="72" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="7">C</text>
 
-                    <!-- Pinned CPU Memory bar -->
-                    <text x="20" y="265" fill="#fb923c" font-family="monospace" font-size="10">CPU Mem:</text>
-                    <rect x="70" y="252" width="870" height="28" rx="4" fill="#0b0f1a" stroke="rgba(251,146,60,0.2)" stroke-width="1"/>
-                    <!-- Model A already loaded -->
-                    <rect x="72" y="254" width="860" height="24" rx="3" fill="rgba(56,189,248,0.1)"/>
-                    <text x="160" y="270" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A in memory</text>
-                    <!-- Prefetch B starts immediately when A group begins -->
-                    <rect x="80" y="254" width="330" height="24" rx="3" fill="rgba(129,140,248,0.15)" stroke="#818cf8" stroke-width="0.8" stroke-dasharray="3,2"/>
-                    <text x="245" y="270" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">prefetch B (SSD&rarr;CPU, overlapped)</text>
-                    <!-- B ready, prefetch C -->
-                    <rect x="420" y="254" width="270" height="24" rx="3" fill="rgba(251,146,60,0.12)" stroke="#fb923c" stroke-width="0.8" stroke-dasharray="3,2"/>
-                    <text x="555" y="270" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="9">prefetch C (SSD&rarr;CPU, overlapped)</text>
+                    <text x="836" y="90" fill="#94a3b8" font-family="monospace" font-size="9">GPU 1:</text>
+                    <rect x="836" y="94" width="38" height="14" rx="3" fill="rgba(129,140,248,0.3)" stroke="#818cf8" stroke-width="0.8"/>
+                    <text x="855" y="104" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">B-L</text>
+                    <rect x="878" y="94" width="18" height="14" rx="3" fill="rgba(129,140,248,0.15)" stroke="#818cf8" stroke-width="0.8"/>
+                    <text x="887" y="104" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="6">s</text>
+                    <rect x="900" y="94" width="20" height="14" rx="3" fill="rgba(52,211,153,0.3)" stroke="#34d399" stroke-width="0.8"/>
+                    <text x="910" y="104" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="7">D</text>
+                    <rect x="924" y="94" width="18" height="14" rx="3" fill="rgba(244,114,182,0.3)" stroke="#f472b6" stroke-width="0.8"/>
+                    <text x="933" y="104" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="7">E</text>
 
-                    <!-- SSD bar -->
-                    <text x="20" y="305" fill="#64748b" font-family="monospace" font-size="10">SSD:</text>
-                    <rect x="70" y="292" width="870" height="24" rx="4" fill="#0b0f1a" stroke="rgba(148,163,184,0.1)" stroke-width="1"/>
-                    <rect x="80" y="295" width="100" height="18" rx="3" fill="rgba(129,140,248,0.2)"/>
-                    <text x="130" y="307" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="8">read B</text>
-                    <rect x="420" y="295" width="100" height="18" rx="3" fill="rgba(251,146,60,0.2)"/>
-                    <text x="470" y="307" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="8">read C</text>
+                    <text x="888" y="132" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="8">long tasks cover</text>
+                    <text x="888" y="143" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="8">prefetch latency</text>
+                    <text x="888" y="158" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="8">L = long, s = short</text>
 
-                    <!-- Annotations -->
-                    <!-- Arrow: prefetch B finishes before A group ends -->
-                    <line x1="412" y1="280" x2="412" y2="238" stroke="#818cf8" stroke-width="1" stroke-dasharray="3,2"/>
-                    <text x="390" y="248" fill="#818cf8" font-family="sans-serif" font-size="8" text-anchor="end">B ready</text>
-
-                    <line x1="696" y1="280" x2="696" y2="238" stroke="#fb923c" stroke-width="1" stroke-dasharray="3,2"/>
-                    <text x="674" y="248" fill="#fb923c" font-family="sans-serif" font-size="8" text-anchor="end">C ready</text>
-
-                    <!-- Memory guard note -->
-                    <rect x="70" y="330" width="300" height="36" rx="6" fill="rgba(52,211,153,0.08)" stroke="#34d399" stroke-width="1"/>
-                    <text x="80" y="348" fill="#34d399" font-family="sans-serif" font-size="10" font-weight="600">Memory Guard (256 GB)</text>
-                    <text x="80" y="360" fill="#94a3b8" font-family="sans-serif" font-size="9">Skip prefetch if pinned memory pool is full</text>
-
-                    <!-- Key insight -->
-                    <rect x="400" y="330" width="540" height="36" rx="6" fill="rgba(56,189,248,0.06)" stroke="rgba(56,189,248,0.3)" stroke-width="1"/>
-                    <text x="410" y="348" fill="#38bdf8" font-family="sans-serif" font-size="10" font-weight="600">Key: SSD&rarr;CPU transfer happens during GPU compute</text>
-                    <text x="410" y="360" fill="#94a3b8" font-family="sans-serif" font-size="9">Only CPU&rarr;GPU DMA (~5s) is visible at switch time</text>
-
-                    <!-- Legend -->
-                    <rect x="70" y="380" width="16" height="10" rx="2" fill="rgba(56,189,248,0.3)"/>
-                    <text x="92" y="389" fill="#94a3b8" font-size="9" font-family="sans-serif">GPU compute</text>
-                    <rect x="200" y="380" width="16" height="10" rx="2" fill="rgba(251,146,60,0.6)"/>
-                    <text x="222" y="389" fill="#94a3b8" font-size="9" font-family="sans-serif">DMA transfer</text>
-                    <rect x="330" y="380" width="16" height="10" rx="2" fill="none" stroke="#818cf8" stroke-width="0.8" stroke-dasharray="3,2"/>
-                    <text x="352" y="389" fill="#94a3b8" font-size="9" font-family="sans-serif">prefetch (overlapped)</text>
+                    <!-- Bottom insight bar -->
+                    <rect x="10" y="210" width="938" height="36" rx="6" fill="rgba(56,189,248,0.06)" stroke="rgba(56,189,248,0.3)" stroke-width="1"/>
+                    <text x="480" y="228" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="11" font-weight="600">Group &rarr; Optimal order (Johnson) &rarr; Balance GPUs &rarr; Interleave long/short within each GPU</text>
+                    <text x="480" y="242" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="9">Reduces N random model switches to K grouped switches. Johnson's Rule minimises makespan for the I/O + GPU two-stage overlap.</text>
                 </svg>
             </div>
         </div>
         <div class="slide-number">7</div>
     </section>
     <!-- ============================================================ -->
-    <!-- SLIDE 8: Three Strategies                                     -->
+    <!-- SLIDE 8: Execute with Chained Prefetch                        -->
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-8">
+        <div class="slide-content" style="padding: clamp(0.8rem, 2vw, 2rem);">
+            <h2 class="reveal">Execution with Chained Prefetch</h2>
+            <div class="chart-container reveal" style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                <svg viewBox="0 0 960 460" style="width: min(95vw, 1200px); height: auto;">
+                    <defs>
+                        <marker id="pa8" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+                        </marker>
+                    </defs>
+
+                    <!-- Title labels -->
+                    <text x="20" y="24" fill="#94a3b8" font-family="sans-serif" font-size="11" font-weight="600">TIME &rarr;</text>
+
+                    <!-- ── GPU 0: A → C ── -->
+                    <text x="20" y="62" fill="#94a3b8" font-family="monospace" font-size="13" font-weight="600">GPU 0</text>
+
+                    <!-- GPU 0 compute bar -->
+                    <text x="90" y="46" fill="#64748b" font-family="sans-serif" font-size="9">Compute</text>
+                    <rect x="90" y="50" width="840" height="32" rx="5" fill="#0b0f1a" stroke="rgba(148,163,184,0.15)" stroke-width="1"/>
+                    <!-- Model A -->
+                    <rect x="94" y="54" width="400" height="24" rx="4" fill="rgba(56,189,248,0.3)"/>
+                    <text x="294" y="70" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="12">Model A  (200 tasks)</text>
+                    <!-- PCIe gap -->
+                    <rect x="496" y="54" width="16" height="24" rx="2" fill="rgba(251,146,60,0.6)"/>
+                    <text x="504" y="70" text-anchor="middle" fill="#fff" font-family="monospace" font-size="6">P</text>
+                    <!-- Model C -->
+                    <rect x="514" y="54" width="280" height="24" rx="4" fill="rgba(251,146,60,0.25)"/>
+                    <text x="654" y="70" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="12">Model C  (100 tasks)</text>
+
+                    <!-- GPU 0 prefetch bar -->
+                    <text x="90" y="96" fill="#64748b" font-family="sans-serif" font-size="9">I/O (SSD&rarr;CPU)</text>
+                    <rect x="90" y="100" width="840" height="22" rx="5" fill="#0b0f1a" stroke="rgba(148,163,184,0.08)" stroke-width="1"/>
+                    <!-- prefetch C during A -->
+                    <rect x="104" y="104" width="388" height="14" rx="3" fill="rgba(251,146,60,0.12)" stroke="#fb923c" stroke-width="1" stroke-dasharray="4,2"/>
+                    <text x="298" y="114" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="9">prefetch C  (SSD &rarr; pinned mem)</text>
+                    <!-- C ready marker -->
+                    <line x1="494" y1="120" x2="494" y2="78" stroke="#fb923c" stroke-width="1.2" stroke-dasharray="4,2"/>
+                    <circle cx="494" cy="78" r="3" fill="#fb923c"/>
+                    <text x="490" y="132" fill="#fb923c" font-family="sans-serif" font-size="9" text-anchor="end" font-weight="600">C ready</text>
+
+                    <!-- ── GPU 1: B → D → E ── -->
+                    <text x="20" y="182" fill="#94a3b8" font-family="monospace" font-size="13" font-weight="600">GPU 1</text>
+
+                    <!-- GPU 1 compute bar -->
+                    <text x="90" y="166" fill="#64748b" font-family="sans-serif" font-size="9">Compute</text>
+                    <rect x="90" y="170" width="840" height="32" rx="5" fill="#0b0f1a" stroke="rgba(148,163,184,0.15)" stroke-width="1"/>
+                    <!-- Model B -->
+                    <rect x="94" y="174" width="340" height="24" rx="4" fill="rgba(129,140,248,0.3)"/>
+                    <text x="264" y="190" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="12">Model B  (150 tasks)</text>
+                    <!-- PCIe B→D -->
+                    <rect x="436" y="174" width="16" height="24" rx="2" fill="rgba(251,146,60,0.6)"/>
+                    <text x="444" y="190" text-anchor="middle" fill="#fff" font-family="monospace" font-size="6">P</text>
+                    <!-- Model D -->
+                    <rect x="454" y="174" width="200" height="24" rx="4" fill="rgba(52,211,153,0.25)"/>
+                    <text x="554" y="190" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="12">Model D  (50 tasks)</text>
+                    <!-- PCIe D→E -->
+                    <rect x="656" y="174" width="16" height="24" rx="2" fill="rgba(251,146,60,0.6)"/>
+                    <text x="664" y="190" text-anchor="middle" fill="#fff" font-family="monospace" font-size="6">P</text>
+                    <!-- Model E -->
+                    <rect x="674" y="174" width="180" height="24" rx="4" fill="rgba(244,114,182,0.25)"/>
+                    <text x="764" y="190" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="12">Model E  (40 tasks)</text>
+
+                    <!-- GPU 1 prefetch bar -->
+                    <text x="90" y="216" fill="#64748b" font-family="sans-serif" font-size="9">I/O (SSD&rarr;CPU)</text>
+                    <rect x="90" y="220" width="840" height="22" rx="5" fill="#0b0f1a" stroke="rgba(148,163,184,0.08)" stroke-width="1"/>
+                    <!-- prefetch D during B -->
+                    <rect x="104" y="224" width="328" height="14" rx="3" fill="rgba(52,211,153,0.12)" stroke="#34d399" stroke-width="1" stroke-dasharray="4,2"/>
+                    <text x="268" y="234" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="9">prefetch D</text>
+                    <!-- prefetch E starts during B, continues into D -->
+                    <rect x="240" y="224" width="412" height="14" rx="3" fill="rgba(244,114,182,0.10)" stroke="#f472b6" stroke-width="1" stroke-dasharray="4,2"/>
+                    <text x="446" y="234" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="9">prefetch E  (chained: starts during B, finishes during D)</text>
+
+                    <!-- D ready marker -->
+                    <line x1="434" y1="240" x2="434" y2="198" stroke="#34d399" stroke-width="1.2" stroke-dasharray="4,2"/>
+                    <circle cx="434" cy="198" r="3" fill="#34d399"/>
+                    <text x="430" y="252" fill="#34d399" font-family="sans-serif" font-size="9" text-anchor="end" font-weight="600">D ready</text>
+                    <!-- E ready marker -->
+                    <line x1="654" y1="240" x2="654" y2="198" stroke="#f472b6" stroke-width="1.2" stroke-dasharray="4,2"/>
+                    <circle cx="654" cy="198" r="3" fill="#f472b6"/>
+                    <text x="650" y="252" fill="#f472b6" font-family="sans-serif" font-size="9" text-anchor="end" font-weight="600">E ready</text>
+
+                    <!-- ── Key Insight Box ── -->
+                    <rect x="40" y="280" width="880" height="70" rx="8" fill="rgba(56,189,248,0.06)" stroke="rgba(56,189,248,0.3)" stroke-width="1"/>
+                    <text x="480" y="302" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="12" font-weight="600">SSD &rarr; CPU prefetch fully overlapped with GPU compute</text>
+                    <text x="480" y="318" text-anchor="middle" fill="#e8edf5" font-family="sans-serif" font-size="11">Only PCIe transfer (~1s per 7B model) causes a gap at model switch</text>
+                    <text x="480" y="336" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="10">Chained prefetch: next model loads during current execution; if time remains, the one after starts too</text>
+
+                    <!-- ── Legend ── -->
+                    <rect x="200" y="370" width="560" height="30" rx="6" fill="rgba(148,163,184,0.04)" stroke="rgba(148,163,184,0.1)" stroke-width="1"/>
+                    <rect x="220" y="378" width="16" height="12" rx="2" fill="rgba(56,189,248,0.3)"/>
+                    <text x="242" y="388" fill="#94a3b8" font-size="10" font-family="sans-serif">GPU compute</text>
+                    <rect x="330" y="378" width="16" height="12" rx="2" fill="rgba(251,146,60,0.6)"/>
+                    <text x="352" y="388" fill="#94a3b8" font-size="10" font-family="sans-serif">PCIe transfer</text>
+                    <rect x="450" y="378" width="16" height="12" rx="2" fill="none" stroke="#818cf8" stroke-width="1" stroke-dasharray="4,2"/>
+                    <text x="472" y="388" fill="#94a3b8" font-size="10" font-family="sans-serif">SSD&rarr;CPU prefetch</text>
+                    <circle cx="600" cy="384" r="3" fill="#fb923c"/>
+                    <text x="610" y="388" fill="#94a3b8" font-size="10" font-family="sans-serif">model ready</text>
+                </svg>
+            </div>
+        </div>
+        <div class="slide-number">8</div>
+    </section>
+    <!-- ============================================================ -->
+    <!-- SLIDE 9: Three Strategies                                     -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-9">
         <div class="slide-content">
             <h2 class="reveal">Concurrency Strategies</h2>
             <p class="reveal">Three strategies control how tasks within a model group are dispatched to the Router:</p>
@@ -1118,13 +1181,13 @@
                 <p>Semaphore keeps the GPU pipeline full without overwhelming the backend &mdash; it is the default for all experiments.</p>
             </div>
         </div>
-        <div class="slide-number">8</div>
+        <div class="slide-number">9</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 9: Evaluation Setup                                     -->
+    <!-- SLIDE 10: Evaluation Setup                                     -->
     <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-9">
+    <section class="slide content-slide" id="slide-10">
         <div class="slide-content">
             <h2 class="reveal">Evaluation Setup</h2>
             <div class="two-col">
@@ -1156,17 +1219,17 @@
                 <div class="metric-box"><div class="val">256 GB</div><div class="lbl">CPU memory</div></div>
             </div>
         </div>
-        <div class="slide-number">9</div>
+        <div class="slide-number">10</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 10: Exp 1 — Strategy Comparison                         -->
+    <!-- SLIDE 11: Exp 1 — Strategy Comparison                         -->
     <!-- Calc: grouped+prefetch, 500 tasks, 0.5s each = 250s compute  -->
     <!-- sync: 250s sequential + 2*5s prefetch = 260s                  -->
     <!-- chunked(10): 50 chunks * 5s = 250s + overhead ~275s           -->
     <!-- semaphore(10): pipeline full, ~260s                           -->
     <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-10">
+    <section class="slide content-slide" id="slide-11">
         <div class="slide-content">
             <h2 class="reveal">Experiment 1: Strategy Comparison</h2>
             <p class="reveal">500 tasks, model grouping ON, aggressive prefetch ON. Comparing concurrency strategies:</p>
@@ -1204,16 +1267,16 @@
                 <p>Semaphore achieves ~3x throughput over sync by keeping the GPU pipeline saturated. Chunked leaves idle gaps between batches.</p>
             </div>
         </div>
-        <div class="slide-number">10</div>
+        <div class="slide-number">11</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 11: Exp 2 — Grouping Effect (3 configs)                 -->
+    <!-- SLIDE 12: Exp 2 — Grouping Effect (3 configs)                 -->
     <!-- FIFO: 180 switches * 90s = 16200s + 250s compute = 16450s     -->
     <!-- Grouped: 2 switches * 90s = 180s + 250s = 430s                -->
     <!-- Grouped+Prefetch: 2 * 5s = 10s + 250s = 260s                 -->
     <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-11">
+    <section class="slide content-slide" id="slide-12">
         <div class="slide-content">
             <h2 class="reveal">Experiment 2: Model Grouping Effect</h2>
             <p class="reveal">Same workload (500 tasks, 3 models), semaphore strategy. Three configurations:</p>
@@ -1256,11 +1319,11 @@
                 <p>Grouping alone is the dominant win &mdash; eliminating 178 switches saves ~16,020s. Aggressive prefetch further cuts the remaining 180s of switch overhead to ~10s.</p>
             </div>
         </div>
-        <div class="slide-number">11</div>
+        <div class="slide-number">12</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 12: Exp 3 — Model Size Robustness (corrected)           -->
+    <!-- SLIDE 13: Exp 3 — Model Size Robustness (corrected)           -->
     <!-- Small-only: 1 model, 0 switches, 500*0.5=250s                -->
     <!-- Mixed 3 models: FIFO ~16450s, Grouped 430s, +PF 260s         -->
     <!--   Grouped speedup vs FIFO: 16450/430 = 38.3x                 -->
@@ -1270,7 +1333,7 @@
     <!--   Grouped: 1*90 + 250 = 340s => 24.6x                        -->
     <!--   +PF: 1*5 + 250 = 255s => 32.7x                             -->
     <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-12">
+    <section class="slide content-slide" id="slide-13">
         <div class="slide-content">
             <h2 class="reveal">Experiment 3: Scaling Across Model Mixes</h2>
             <p class="reveal">Testing with different model compositions (500 tasks each, semaphore strategy):</p>
@@ -1312,13 +1375,71 @@
                 <p>Benefits scale with model diversity. Single-model workloads have no switches to eliminate. The more distinct models, the more dramatic the improvement &mdash; up to 63x for the standard 3-model mix.</p>
             </div>
         </div>
-        <div class="slide-number">12</div>
+        <div class="slide-number">13</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 13: Limitations & Future Work                           -->
+    <!-- SLIDE 14: Exp 4 — Johnson's Rule Benchmark                   -->
     <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-13">
+    <!-- Mock: 8 models, 1000 tasks, skewed distribution               -->
+    <!-- Models: M1(300), M2(200), M3(150), M4(100), M5(80), M6(70), M7(60), M8(40) -->
+    <!-- Load=90s each, task=0.5s, 7 switches                         -->
+    <!-- Naive order: small groups between large → prefetch can't finish -->
+    <!--   ~4 partial stalls × 70s = 280s idle → 500+280+35 = ~815s   -->
+    <!-- Johnson's: large-compute first (S1), small last (S2)         -->
+    <!--   ~1 partial stall × 70s = 70s idle → 500+70+35 = ~605s      -->
+    <section class="slide content-slide" id="slide-14">
+        <div class="slide-content">
+            <h2 class="reveal">Experiment 4: Johnson's Rule Ordering</h2>
+            <p class="reveal">Skewed workload: <span class="em">8 models</span>, 1000 tasks, highly uneven distribution. Grouped + aggressive prefetch ON.</p>
+            <table class="results-table reveal">
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Tasks</th>
+                        <th>Compute</th>
+                        <th>Load</th>
+                        <th>Johnson Set</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>M1</td><td>300</td><td>150s</td><td>90s</td><td class="best">S1 (P&ge;I)</td></tr>
+                    <tr><td>M2</td><td>200</td><td>100s</td><td>90s</td><td class="best">S1</td></tr>
+                    <tr><td>M3</td><td>150</td><td>75s</td><td>90s</td><td class="worst">S2 (P&lt;I)</td></tr>
+                    <tr><td>M4</td><td>100</td><td>50s</td><td>90s</td><td class="worst">S2</td></tr>
+                    <tr><td>M5&ndash;M8</td><td>40&ndash;80</td><td>20&ndash;40s</td><td>90s</td><td class="worst">S2</td></tr>
+                </tbody>
+            </table>
+            <div class="two-col reveal">
+                <div>
+                    <table class="results-table">
+                        <thead><tr><th>Ordering</th><th>Makespan</th><th>I/O Idle</th></tr></thead>
+                        <tbody>
+                            <tr><td>Naive (alphabetical)</td><td class="worst">~815s</td><td class="worst">~280s</td></tr>
+                            <tr class="highlight-row"><td>Johnson's Rule</td><td class="best">~605s</td><td class="best">~70s</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <div class="metric-box green" style="margin-bottom: clamp(0.3rem, 0.6vh, 0.5rem);">
+                        <div class="val">26%</div><div class="lbl">makespan reduction</div>
+                    </div>
+                    <div class="metric-box green">
+                        <div class="val">75%</div><div class="lbl">less I/O idle time</div>
+                    </div>
+                </div>
+            </div>
+            <div class="insight reveal">
+                <p>Johnson's Rule places compute-heavy groups (S1) first &mdash; their long execution fully covers the next model's prefetch. I/O-heavy groups (S2) run last where stalls are less impactful. The benefit grows with model count and task skew.</p>
+            </div>
+        </div>
+        <div class="slide-number">14</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 15: Limitations & Future Work                           -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-15">
         <div class="slide-content">
             <h2 class="reveal">Limitations &amp; Future Work</h2>
             <div class="two-col">
@@ -1340,13 +1461,13 @@
                 </div>
             </div>
         </div>
-        <div class="slide-number">13</div>
+        <div class="slide-number">15</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 14: Conclusion                                          -->
+    <!-- SLIDE 16: Conclusion                                          -->
     <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-14">
+    <section class="slide content-slide" id="slide-16">
         <div class="slide-content">
             <h2 class="reveal">Conclusion</h2>
             <ul>
@@ -1359,13 +1480,13 @@
                 <p>Together, these techniques achieve up to 63x speedup over naive FIFO, making serverless batch LLM inference practical by turning model-switch overhead from a dominant cost into a marginal one.</p>
             </div>
         </div>
-        <div class="slide-number">14</div>
+        <div class="slide-number">16</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 15: Thank You                                           -->
+    <!-- SLIDE 17: Thank You                                           -->
     <!-- ============================================================ -->
-    <section class="slide title-slide" id="slide-15">
+    <section class="slide title-slide" id="slide-17">
         <div class="slide-content">
             <h1 class="reveal">Thank You</h1>
             <p class="subtitle reveal">Questions?</p>
@@ -1375,7 +1496,7 @@
                 <span>Efficient Scheduling for Batched AI Jobs</span>
             </div>
         </div>
-        <div class="slide-number">15</div>
+        <div class="slide-number">17</div>
     </section>
 
     <!-- ============================================================ -->
