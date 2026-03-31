@@ -63,11 +63,11 @@
 \date{March 2026}
 
 \abstract{
-Large Language Model (LLM) batch workloads---model benchmarking, dataset labelling, synthetic data generation---submit hundreds of tasks that share common model weights. Existing serverless LLM schedulers treat tasks as independent, causing excessive model switching that dominates execution time.
+Large Language Model (LLM) batch workloads---encompassing model benchmarking, dataset labelling, and synthetic data generation---submit hundreds of tasks that share common model weights. Existing serverless LLM schedulers treat tasks as independent, causing excessive model switching that dominates total execution time.
 
-This dissertation formalises the batch scheduling problem as a two-machine flow-shop (I/O and GPU computation) and introduces three composable optimisations: (1)~\textbf{model grouping} reduces model switches from $O(n)$ to $O(k)$; (2)~\textbf{Johnson's Rule ordering} sequences model groups to maximise I/O-computation overlap; and (3)~\textbf{checkpoint prefetching} preloads the next model's weights into CPU pinned memory while the current group executes.
+This dissertation formalises the batch scheduling problem as a two-machine flow-shop (I/O and GPU computation) and introduces three composable optimisations: (1)~\textbf{model grouping} reduces model switches from $O(n)$ to $O(k)$; (2)~\textbf{Johnson's Rule ordering} sequences model groups to maximise I/O-computation overlap; and (3)~\textbf{checkpoint prefetching} preloads the weights of the next model into CPU pinned memory while the current group executes.
 
-Evaluation on NVIDIA RTX A5000 GPUs shows that model grouping reduces makespan by 99\% over FIFO (78,900s to 1,107s for a 500-task batch with 5 models). Checkpoint prefetching hides 68.7\% of model loading latency. Johnson's Rule provides 7.2--22.0\% additional makespan reduction over naive orderings. The shared-aware strategy outperforms FIFO by 49--237$\times$ across batch sizes 100--10,000 and model sizes 0.6B--32B, with advantages growing as batch size increases. Prefetching remains effective across storage tiers including 10\,GbE network storage (78.9\% latency hidden), making remote storage viable for production deployments.
+Evaluation on NVIDIA RTX A5000 GPUs shows that model grouping reduces makespan by 99\% over FIFO (78,900s to 1,107s for a 500-task batch with five models). Checkpoint prefetching hides 68.7\% of model loading latency. Johnson's Rule provides 7.2--22.0\% additional makespan reduction over naive orderings. The shared-aware strategy outperforms FIFO by 49--237$\times$ across batch sizes of 100--10,000 tasks and model sizes of 0.6B--32B, with advantages growing as batch size increases. Prefetching remains effective across storage tiers including 10\,GbE network storage (78.9\% of I/O latency hidden), demonstrating the viability of remote storage in production deployments.
 }
 
 \maketitle
@@ -98,7 +98,7 @@ I would like to thank my supervisor for their guidance and feedback throughout t
 
 \chapter{Introduction}
 
-The emergence of Large Language Models (LLMs) has created substantial demand for batch inference workloads. Unlike online serving where individual requests require low-latency responses, batch workloads submit thousands of tasks together for offline processing. Common scenarios include:
+The emergence of Large Language Models (LLMs) has created substantial demand for batch inference workloads. Unlike online serving, where individual requests require low-latency responses, batch workloads submit thousands of tasks together for offline processing. Common scenarios include:
 
 \begin{itemize}
 \item \textbf{Model Benchmarking}: Evaluating multiple candidate models on the same prompt set (e.g., MMLU, HumanEval, MT-Bench) to generate scoring matrices.
@@ -106,17 +106,17 @@ The emergence of Large Language Models (LLMs) has created substantial demand for
 \item \textbf{Synthetic Data Generation}: Creating training data by applying the same model and prompt template to numerous data points.
 \end{itemize}
 
-These batch workloads exhibit a critical property that existing schedulers ignore: \textit{tasks within a batch are not independent}. They share substantial computational structure---identical model weights and common prompt prefixes---that can be exploited to reduce total execution time.
+These batch workloads exhibit a critical property that existing schedulers overlook: \textit{tasks within a batch are not independent}. They share substantial computational structure---identical model weights and common prompt prefixes---that can be exploited to reduce total execution time.
 
 \section{Motivation}
 
-Consider a model benchmarking scenario: evaluating two LLMs on 10 questions each, totalling 20 tasks. A naive scheduler executes tasks in submission order (ABABAB\ldots), repeatedly loading and unloading model weights. Since each model switch takes on the order of 100 seconds while each inference takes under a second, the system spends over 96\% of its time on I/O. Grouping tasks by model (AAAA\ldots BBBB) reduces switches from 10 to~1, cutting execution time by 87\% (Figure~\ref{fig:fifo_vs_grouped}).
+Consider a model benchmarking scenario: evaluating two LLMs on 10 questions each, totalling 20 tasks. A naive scheduler executes tasks in submission order (ABABAB\ldots), repeatedly loading and evicting model weights. Since each model switch takes on the order of 100 seconds while each inference requires under a second, the system spends over 96\% of its time on I/O. Grouping tasks by model (AAAA\ldots BBBB) reduces switches from 10 to~1, cutting execution time by 87\% (Figure~\ref{fig:fifo_vs_grouped}).
 
-The insight is straightforward: \textit{batch tasks contain exploitable shared structure, and the scheduler should discover and leverage this structure to minimise makespan}. Reducing model switches from $O(n)$ to $O(k)$ through grouping provides an order-of-magnitude improvement.
+The key observation is that \textit{batch tasks contain exploitable shared structure, and the scheduler should discover and leverage this structure to minimise makespan}. Reducing model switches from $O(n)$ to $O(k)$ through grouping provides an order-of-magnitude improvement.
 
-However, grouping alone does not eliminate the remaining $O(k)$ model transitions. \textbf{Checkpoint prefetching} hides this residual latency by loading the next model's weights into CPU pinned memory while the current group executes on GPU. Since I/O and GPU computation use independent hardware resources, they can proceed in parallel.
+However, grouping alone does not eliminate the remaining $O(k)$ model transitions. \textbf{Checkpoint prefetching} hides this residual latency by loading the weights of the next model into CPU pinned memory while the current group executes on GPU. Since I/O and GPU computation use independent hardware resources, they can proceed in parallel.
 
-Prefetching effectiveness depends on the \textit{order} in which groups execute: a group with long compute time provides a large overlap window, while a short group provides little. This pattern---two sequential stages (I/O then GPU), each model group visits both, minimise total completion time---is precisely the classical \textit{two-machine flow-shop} problem~\cite{johnson1954optimal}. Johnson's Rule provides the provably optimal group ordering by placing compute-heavy groups first, maximising the overlap window for prefetching.
+Prefetching effectiveness depends on the \textit{order} in which groups execute: a group with long compute time provides a large overlap window, while a short group provides little. This structure---in which each model group passes through two sequential stages (I/O loading then GPU computation), with the objective of minimising total completion time---is precisely the classical \textit{two-machine flow-shop} problem~\cite{johnson1954optimal}. Johnson's Rule provides the provably optimal group ordering by placing compute-heavy groups first, maximising the overlap window for prefetching.
 
 The three components compose into a complete pipeline: grouping reduces switches from $O(n)$ to $O(k)$, prefetching hides I/O behind computation, and Johnson's Rule maximises overlap. Despite this opportunity, existing serverless LLM schedulers treat batch tasks as independent, resulting in excessive model switching and no I/O-computation overlap.
 
@@ -160,13 +160,33 @@ The three components compose into a complete pipeline: grouping reduces switches
 
 \section{Problem Definition}
 
+\textbf{Concrete batch structure.}
+A batch is submitted as a JSONL file in which each line specifies one task: the target model, the prompt, and generation parameters. The example below shows a small multi-model batch typical of the model benchmarking scenario described above.
+
+\begin{lstlisting}[language={},basicstyle=\ttfamily\small,frame=single,numbers=none]
+{"custom_id":"t1","method":"POST","url":"/v1/chat/completions",
+ "body":{"model":"Qwen/Qwen3-0.6B",
+         "messages":[{"role":"user","content":"Summarise the paper."}],
+         "max_tokens":256}}
+{"custom_id":"t2","method":"POST","url":"/v1/chat/completions",
+ "body":{"model":"Qwen/Qwen3-8B",
+         "messages":[{"role":"user","content":"Summarise the paper."}],
+         "max_tokens":256}}
+{"custom_id":"t3","method":"POST","url":"/v1/chat/completions",
+ "body":{"model":"Qwen/Qwen3-0.6B",
+         "messages":[{"role":"user","content":"Translate to French."}],
+         "max_tokens":128}}
+\end{lstlisting}
+
+Tasks \texttt{t1} and \texttt{t3} target the same model and therefore share its weights; a scheduler that recognises this can execute them consecutively without reloading. Task \texttt{t2} targets a different model, requiring a model switch. The batch API follows the OpenAI Batch API specification \citep{openai_batch_api}: clients submit a file via \texttt{POST /v1/files}, create a batch job via \texttt{POST /v1/batches}, and poll for results via \texttt{GET /v1/batches/\{id\}}. Results are written to an output JSONL file with one response per line, keyed by \texttt{custom\_id}.
+
 We formalise the batch scheduling problem as follows:
 
 \textbf{Input:}
 \begin{itemize}
-\item A batch of tasks $B = \{t_1, t_2, ..., t_n\}$
+\item A batch of $n$ tasks $B = \{t_1, t_2, \ldots, t_n\}$
 \item Each task $t_i = (m_i, p_i, \theta_i)$ where $m_i$ is the model, $p_i$ is the prompt, and $\theta_i$ are generation parameters
-\item A cluster of $k$ GPU workers $W = \{w_1, w_2, ..., w_k\}$
+\item A cluster of $k$ GPU workers $W = \{w_1, w_2, \ldots, w_k\}$
 \item Each worker can load at most one model at a time, with loading latency $L_{load}(m)$
 \item Task inference latency is $L_{infer}(t_i)$
 \end{itemize}
@@ -180,7 +200,7 @@ We formalise the batch scheduling problem as follows:
 \textbf{Optimisation Objective:}
 $$\text{Minimise } C_{max} = \max_{i \in \{1,...,n\}} \text{completion\_time}(t_i)$$
 
-That is, minimise the \textit{makespan}---the time when the last task completes.
+That is, minimise the \textit{makespan}---the time at which the last task completes.
 
 \textbf{Constraints:}
 \begin{itemize}
@@ -206,22 +226,22 @@ This dissertation addresses three research questions:
 This work makes the following contributions:
 
 \begin{enumerate}
-\item \textbf{Two-Machine Flow-Shop Formulation}: We model the batch scheduling problem as a classical two-machine flow-shop where Machine~A is I/O (loading model weights) and Machine~B is GPU computation, enabling the application of Johnson's Rule for provably optimal model group ordering.
+\item \textbf{Two-Machine Flow-Shop Formulation}: The batch scheduling problem is modelled as a classical two-machine flow-shop where Machine~A is I/O (loading model weights) and Machine~B is GPU computation, enabling the application of Johnson's Rule for provably optimal model group ordering.
 
 \item \textbf{Shared-Aware Scheduling Algorithm}: An algorithm that discovers model sharing relationships within a batch, groups tasks by model to reduce switches from $O(n)$ to $O(k)$, and applies Johnson's Rule to order groups for maximal I/O-computation overlap.
 
-\item \textbf{Checkpoint Prefetching Mechanism}: A prefetching policy that leverages ServerlessLLM's pinned memory pool to preload the next model's weights while the current group executes, hiding I/O latency through pipelining.
+\item \textbf{Checkpoint Prefetching Mechanism}: A prefetching policy that leverages the pinned memory pool of ServerlessLLM to preload the weights of the next model while the current group executes, hiding I/O latency through pipelining.
 
 \item \textbf{Network-Aware Prefetching Extension}: Analysis and evaluation of prefetching across storage tiers including RAID-0, 10\,GbE NFS, and 100\,GbE NFS, demonstrating that the prefetch architecture generalises to network-attached storage.
 
 \item \textbf{OpenAI-Compatible Batch API}: An OpenAI-compatible batch REST API extended for multi-model batches, enabling clients to submit heterogeneous task lists with a single request and receive results asynchronously.
 \end{enumerate}
 
-In total, the project involved implementing approximately 3,500 lines of new Python code on top of the existing ServerlessLLM framework ($\sim$15K LoC).
+In total, this project contributed approximately 3,500 lines of new Python code to the existing ServerlessLLM framework ($\sim$15K LoC).
 
 \section{Scope and Boundaries}
 
-This work focuses strictly on \textit{cluster-level scheduling}. We do not modify or optimise the inference engine itself. Specifically, we do not address:
+This work focuses strictly on \textit{cluster-level scheduling}. The inference engine itself is neither modified nor optimised. Specifically, this work does not address:
 
 \begin{itemize}
 \item KV cache management within the inference engine (e.g., PagedAttention, block allocation)
@@ -229,7 +249,7 @@ This work focuses strictly on \textit{cluster-level scheduling}. We do not modif
 \item GPU kernel optimisations or quantization techniques
 \end{itemize}
 
-Our scheduler operates at a higher level: it decides \textit{which tasks to execute, in what order, on which workers}. The inference engine (vLLM) handles the actual computation. This separation of concerns is deliberate---scheduler-level optimisations are complementary to engine-level optimisations and can be applied without modifying the inference engine.
+The scheduler operates at a higher abstraction level, deciding \textit{which tasks to execute, in what order, and on which workers}. The inference engine (vLLM) handles the actual computation. This separation of concerns is deliberate---scheduler-level optimisations are complementary to engine-level optimisations and can be applied without modifying the inference engine.
 
 
 % ============================================================================
@@ -238,20 +258,20 @@ Our scheduler operates at a higher level: it decides \textit{which tasks to exec
 
 \chapter{Background}
 
-This chapter introduces the technical foundations required to understand the shared-aware scheduling system. We cover the transformer architecture and its inference characteristics, the KV cache mechanism and prefix caching, GPU memory hierarchy and pinned memory transfers, serverless computing and the cold start problem, storage hierarchy (local SSD, RAID, network-attached storage), and the ServerlessLLM framework that this work extends.
+This chapter introduces the technical foundations required to understand the shared-aware scheduling system. Topics covered include the transformer architecture and its inference characteristics, the KV cache mechanism and prefix caching, the GPU memory hierarchy and pinned memory transfers, serverless computing and the cold start problem, the storage hierarchy (local SSD, RAID, and network-attached storage), and the ServerlessLLM framework that this work extends.
 
 \section{Transformer-Based LLM Inference}
 
-Large Language Models are built on the transformer architecture \citep{vaswani2017attention}, which generates output tokens autoregressively. Inference consists of a compute-bound \textit{prefill phase} ($O(L^2)$ attention over the input prompt) followed by a memory-bandwidth-bound \textit{decode phase} (one token per step, each reading the full model weights). Modern LLMs range from 0.5B to 405B parameters \citep{brown2020language, touvron2023llama}; an 8B model requires $\sim$15\,GB in FP16 precision, while a 70B model requires $\sim$140\,GB --- exceeding the memory of a single GPU. Loading these weights from storage to GPU memory is a major bottleneck, taking 80--120 seconds for an 8B model from SSD.
+Large Language Models are built on the transformer architecture \citep{vaswani2017attention}, which generates output tokens autoregressively. Inference consists of a compute-bound \textit{prefill phase} ($O(L^2)$ attention over the input prompt) followed by a memory-bandwidth-bound \textit{decode phase} (one token per step, each pass reading the full model weights). Modern LLMs range from 0.5B to 405B parameters \citep{brown2020language, touvron2023llama}; an 8B model requires $\sim$15\,GB in FP16 precision, while a 70B model requires $\sim$140\,GB---exceeding the memory capacity of a single GPU. Loading these weights from storage to GPU memory constitutes a major bottleneck, taking 80--120 seconds for an 8B model from SSD.
 
-\textbf{Continuous batching.} To improve GPU utilisation, vLLM \citep{kwon2023efficient} introduced \textit{continuous batching} (also called iteration-level scheduling): rather than waiting for an entire request batch to finish before admitting new requests, the inference engine inserts new requests into the batch at every decode step as slots become free. This keeps the GPU near full utilisation during single-model serving. However, continuous batching operates \textit{within} a single loaded model; it does not address the problem of switching between models in a multi-model batch.
+\textbf{Continuous batching.} To improve GPU utilisation, vLLM \citep{kwon2023efficient} introduced \textit{continuous batching} (also called iteration-level scheduling): rather than waiting for an entire request batch to finish before admitting new requests, the inference engine inserts new requests into the batch at every decode step as slots become free. This maintains near-full GPU utilisation during single-model serving. However, continuous batching operates \textit{within} a single loaded model; it does not address the problem of switching between models in a multi-model batch.
 
-\textbf{Tensor parallelism.} When a model's weights exceed a single GPU's VRAM, \textit{tensor parallelism} \citep{shoeybi2019megatron} shards weight matrices across multiple GPUs, with each GPU computing a slice of each matrix multiplication and exchanging activations via all-reduce. This enables inference on 70B+ models using multiple GPUs. Our work assumes each model fits within a single GPU's VRAM; tensor parallelism is an orthogonal technique that could be combined with our scheduler when models span multiple GPUs.
+\textbf{Tensor parallelism.} When a model's weights exceed a single GPU's VRAM, \textit{tensor parallelism} \citep{shoeybi2019megatron} shards weight matrices across multiple GPUs, with each GPU computing a slice of each matrix multiplication and exchanging activations via all-reduce. This enables inference on 70B+ models using multiple GPUs. This work assumes each model fits within a single GPU's VRAM; tensor parallelism is an orthogonal technique that could be combined with the proposed scheduler when models span multiple GPUs.
 
 \section{KV Cache and Prefix Caching}
 \label{sec:bg_kv_cache}
 
-During autoregressive generation, inference engines cache key and value tensors (the \textit{KV cache}) to avoid redundant computation. vLLM \citep{kwon2023efficient} manages KV cache in fixed-size blocks via \textit{PagedAttention}, eliminating fragmentation. When multiple requests share a common prompt prefix, the KV blocks can be computed once and reused \citep{zheng2024sglang}. However, cache effectiveness depends on task ordering: interleaving different prefixes causes eviction. This prefix-level optimisation is complementary to our model grouping but is not directly exploited in this work (see Chapter~\ref{ch:future}).
+During autoregressive generation, inference engines cache key and value tensors (the \textit{KV cache}) to avoid redundant computation. vLLM \citep{kwon2023efficient} manages the KV cache in fixed-size blocks via \textit{PagedAttention}, eliminating fragmentation. When multiple requests share a common prompt prefix, the KV blocks can be computed once and reused \citep{zheng2024sglang}. However, cache effectiveness depends on task ordering: interleaving different prefixes causes eviction. This prefix-level optimisation is complementary to the model grouping approach proposed in this work but is not directly exploited here (see Chapter~\ref{ch:future}).
 
 \section{GPU Memory Hierarchy and Pinned Memory}
 \label{sec:bg_pinned_memory}
@@ -263,13 +283,13 @@ Loading model weights from storage to GPU involves a multi-level memory hierarch
 \item \textbf{CPU memory} $\rightarrow$ \textbf{GPU memory} (VRAM): Transfer via PCIe DMA. Bandwidth: 16--32\,GB/s (PCIe Gen4 x16).
 \end{enumerate}
 
-The CPU$\rightarrow$GPU transfer step is significantly faster when using \textit{pinned memory} (also called page-locked memory). Regular (pageable) memory may be swapped to disk by the OS, requiring an extra copy to a pinned staging buffer before DMA transfer. Pinned memory, allocated via \texttt{cudaHostAlloc} or registered via \texttt{cudaHostRegister} \citep{cuda_guide2024}, is guaranteed to remain in physical RAM, enabling direct DMA transfers without intermediate copies.
+The CPU$\rightarrow$GPU transfer step is significantly faster when using \textit{pinned memory} (also called page-locked memory). Regular (pageable) memory may be swapped to disk by the OS, necessitating an extra copy to a pinned staging buffer before DMA transfer. Pinned memory, allocated via \texttt{cudaHostAlloc} or registered via \texttt{cudaHostRegister} \citep{cuda_guide2024}, is guaranteed to remain in physical RAM, enabling direct DMA transfers without intermediate copies.
 
-ServerlessLLM's sllm-store component \citep{fu2024serverlessllm} exploits this by pre-allocating a pinned memory pool at startup. Model weights are loaded from SSD directly into this pool using multi-threaded I/O, then transferred to GPU via DMA. This two-stage pipeline (SSD$\rightarrow$pinned CPU$\rightarrow$GPU) achieves near-peak PCIe bandwidth, reducing model loading time compared to naive \texttt{torch.load()} which uses pageable memory.
+The sllm-store component of ServerlessLLM \citep{fu2024serverlessllm} exploits this by pre-allocating a pinned memory pool at startup. Model weights are loaded from SSD directly into this pool using multi-threaded I/O, then transferred to the GPU via DMA. This two-stage pipeline (SSD$\rightarrow$pinned CPU$\rightarrow$GPU) achieves near-peak PCIe bandwidth, reducing model loading time relative to a direct \texttt{torch.load()} call, which relies on pageable memory.
 
 \section{Serverless Computing and Cold Starts}
 
-Serverless functions suffer from \textit{cold starts}: the latency of initialising a new instance \citep{shahrad2020serverless}. For LLM inference, cold starts are particularly severe --- loading model weights takes 80--120\,s for an 8B model, which is 100--200$\times$ larger than per-request inference latency ($\sim$0.5\,s). ServerlessLLM \citep{fu2024serverlessllm} mitigates this through locality-enhanced scheduling that places inference on nodes with locally cached checkpoints.
+Serverless functions suffer from \textit{cold starts}: the latency incurred when initialising a new instance \citep{shahrad2020serverless}. For LLM inference, cold starts are particularly severe---loading model weights takes 80--120\,s for an 8B model, which is 100--200$\times$ the per-request inference latency ($\sim$0.5\,s). ServerlessLLM \citep{fu2024serverlessllm} mitigates this through locality-enhanced scheduling that routes inference to nodes with locally cached checkpoints.
 
 \section{ServerlessLLM Architecture}
 \label{sec:bg_serverlessllm}
@@ -283,7 +303,7 @@ ServerlessLLM \citep{fu2024serverlessllm} is an open-source serverless LLM infer
 \item \textbf{AutoScaler}: Monitors deployment state and adjusts the number of vLLM instances based on demand. The default policy is reactive: scale up when queue depth exceeds a threshold, scale down after an idle timeout.
 \end{itemize}
 
-ServerlessLLM's current scheduler is designed for online serving: it assigns incoming requests to any available worker using round-robin. For batch workloads, this has two limitations: (1) tasks are assigned independently without considering shared models or prefixes, leading to excessive model switching; and (2) scaling is reactive rather than proactive, causing unnecessary cold starts at the beginning of a batch.
+The current scheduler of ServerlessLLM is designed for online serving: it assigns incoming requests to available workers using round-robin. For batch workloads, this approach has two limitations: (1) tasks are assigned independently without considering shared models or prefixes, leading to excessive model switching; and (2) scaling is reactive rather than proactive, causing unnecessary cold starts at the beginning of a batch.
 
 \section{Storage Hierarchy and Network-Attached Model Repositories}
 \label{sec:bg_storage_hierarchy}
@@ -307,9 +327,9 @@ Johnson's Rule \citep{pinedo2016scheduling} provides the optimal solution for th
 \item $S_2 = \{j : a_j > b_j\}$ --- jobs where Machine~A time exceeds Machine~B time. Sort $S_2$ by $b_j$ in descending order.
 \end{itemize}
 
-The optimal sequence is $S_1$ followed by $S_2$. The intuition is that compute-heavy jobs ($a_j \leq b_j$) should run first: their long execution on Machine~B covers the loading of the next job on Machine~A. I/O-heavy jobs ($a_j > b_j$) should run last, as there are fewer subsequent jobs that would stall waiting for their loading to complete.
+The optimal sequence is $S_1$ followed by $S_2$. The intuition is that compute-heavy jobs ($a_j \leq b_j$) should execute first: their prolonged execution on Machine~B conceals the loading of the subsequent job on Machine~A. I/O-heavy jobs ($a_j > b_j$) should be scheduled last, since fewer subsequent jobs remain to stall while their loading completes.
 
-This is directly applicable to our problem: Machine~A is the I/O stage (loading model weights from SSD to CPU pinned memory), Machine~B is the compute stage (GPU inference for all tasks in a model group), and each job is a model group. We formalise this mapping in Chapter~4.
+This is directly applicable to the problem at hand: Machine~A is the I/O stage (loading model weights from SSD to CPU pinned memory), Machine~B is the compute stage (GPU inference for all tasks in a model group), and each job is a model group. This mapping is formalised in Chapter~4.
 
 
 % ============================================================================
@@ -318,19 +338,19 @@ This is directly applicable to our problem: Machine~A is the I/O stage (loading 
 
 \chapter{Related Work}
 
-This chapter positions our work relative to existing systems and techniques. We examine LLM batch workloads, ML serving systems, data-locality-aware scheduling, and prefetching mechanisms, identifying the gap that our shared-aware scheduler addresses.
+This chapter positions the proposed work relative to existing systems and techniques. We examine LLM batch workloads, ML serving systems, data-locality-aware scheduling, and prefetching mechanisms, identifying the gap that the shared-aware scheduler addresses.
 
 \section{LLM Batch Workloads}
 
 LLM inference is increasingly used for batch workloads rather than interactive serving. Three common patterns drive this trend:
 
-\textbf{Model benchmarking.} Evaluating candidate models on standardised test suites (MMLU \citep{hendrycks2020measuring}, HumanEval \citep{chen2021evaluating}, MT-Bench \citep{zheng2023judging}) requires running the same prompt set across different models. Comparing 5 models on 1000 prompts yields 5000 tasks with high prompt overlap but model diversity.
+\textbf{Model benchmarking.} Evaluating candidate models on standardised test suites (MMLU \citep{hendrycks2020measuring}, HumanEval \citep{chen2021evaluating}, MT-Bench \citep{zheng2023judging}) requires running the same prompt set across different models. Comparing five models on 1,000 prompts yields 5,000 tasks with high prompt overlap but diverse model identities.
 
 \textbf{Dataset processing.} Large-scale labelling, translation, or summarisation applies a single model to large corpora. All tasks share the model but have different inputs.
 
 \textbf{Synthetic data generation.} Training data generation uses template-based prompts with variable data points, exhibiting both model and prompt template overlap.
 
-Industrial systems recognise this trend. OpenAI's Batch API \citep{openai_batch_api} supports up to 50,000 tasks per batch with 50\% cost savings. AWS Bedrock Batch \citep{aws_bedrock_batch} provides similar functionality. However, both are closed-source, single-model only, and do not expose scheduling policies.
+Industrial systems recognise this trend. The OpenAI Batch API \citep{openai_batch_api} supports up to 50,000 tasks per batch with 50\% cost savings. AWS Bedrock Batch \citep{aws_bedrock_batch} provides similar functionality. However, both are closed-source, support only single-model batches, and do not expose scheduling policies.
 
 \section{ML Serving Systems}
 
@@ -344,11 +364,11 @@ Several systems address the challenge of serving ML models at scale:
 
 \textbf{AlpaServe} \citep{li2023alpaserve} uses statistical multiplexing with model parallelism to serve multiple models on shared GPU clusters. It addresses the model placement problem but does not consider batch-level task reordering.
 
-\textbf{vLLM} \citep{kwon2023efficient} is the de facto standard LLM serving system. It combines PagedAttention (non-contiguous KV cache) with continuous batching and a high-throughput scheduler. vLLM also supports tensor parallelism for multi-GPU inference of large models. Crucially, vLLM is designed for \textit{single-model} serving: it assumes all requests share one loaded model and optimises GPU utilisation within that constraint. In multi-model batch scenarios, naive use of vLLM would still require sequential model loads between groups --- the problem our scheduler addresses.
+\textbf{vLLM} \citep{kwon2023efficient} is the de facto standard LLM serving system. It combines PagedAttention (non-contiguous KV cache) with continuous batching and a high-throughput scheduler. vLLM also supports tensor parallelism for multi-GPU inference of large models. Crucially, vLLM is designed for \textit{single-model} serving: it assumes all requests share one loaded model and optimises GPU utilisation within that constraint. In multi-model batch scenarios, unmodified use of vLLM would still require sequential model loads between groups---the problem that this scheduler addresses.
 
-\textbf{Orca} \citep{yu2022orca} introduced iteration-level scheduling for transformer serving, enabling continuous batching where new requests join an in-progress batch at each decode step. This is complementary to our work: Orca and vLLM optimise \textit{within-model} batching, while we optimise \textit{across-model} task ordering at the cluster scheduler level.
+\textbf{Orca} \citep{yu2022orca} introduced iteration-level scheduling for transformer serving, enabling continuous batching where new requests join an in-progress batch at each decode step. This is complementary to the present work: Orca and vLLM optimise \textit{within-model} batching, while this work optimises \textit{across-model} task ordering at the cluster scheduler level.
 
-None of these systems address the specific problem of batch-level shared structure discovery and exploitation for makespan minimisation.
+None of these systems address the specific problem of batch-level shared-structure discovery and exploitation for makespan minimisation.
 
 \section{Data-Locality and Model-Aware Scheduling}
 
@@ -356,11 +376,11 @@ The principle of moving computation to data rather than data to computation is w
 
 \textbf{Data locality in distributed computing.} MapReduce \citep{dean2008mapreduce} and Spark \citep{zaharia2010spark} schedule tasks on nodes that hold the input data, minimising network transfer. For LLM inference, the analogous principle is scheduling tasks on nodes that hold the model weights.
 
-\textbf{Cluster resource management.} Google's Borg \citep{verma2015large} and Kubernetes \citep{kubernetes2024} provide general-purpose cluster scheduling with affinity rules and resource constraints. Dominant Resource Fairness \citep{ghodsi2011dominant} addresses multi-resource allocation. These systems provide infrastructure for scheduling but do not implement application-specific optimisations like model grouping.
+\textbf{Cluster resource management.} Google's Borg \citep{verma2015large} and Kubernetes \citep{kubernetes2024} provide general-purpose cluster scheduling with affinity rules and resource constraints. Dominant Resource Fairness \citep{ghodsi2011dominant} addresses multi-resource allocation. These systems provide scheduling infrastructure but do not implement application-specific optimisations such as model grouping.
 
-\textbf{Shared computation discovery.} Database query optimisers perform multi-query optimisation to identify common subexpressions across queries \citep{sellis1988multiple}. This inspires our approach: analyse the batch to discover shared structure (models, prefixes), then optimise execution order.
+\textbf{Shared computation discovery.} Database query optimisers perform multi-query optimisation to identify common subexpressions across queries \citep{sellis1988multiple}. This inspires the present approach: analyse the batch to discover shared structure (models, prefixes), then optimise execution order.
 
-\textbf{ServerlessLLM} \citep{fu2024serverlessllm} provides locality-enhanced scheduling that caches checkpoints on local SSDs. However, its scheduler is reactive and does not reorder batch tasks by model or prefix.
+\textbf{ServerlessLLM} \citep{fu2024serverlessllm} provides locality-enhanced scheduling that caches checkpoints on local SSDs. However, the scheduler is reactive and does not reorder batch tasks by model or prefix.
 
 \section{Prefetching and Pipelining}
 
@@ -372,7 +392,7 @@ Prefetching hides I/O latency by loading data before it is needed:
 
 \textbf{Checkpoint management.} CheckFreq \citep{mohan2021checkfreq} optimises DNN checkpoint frequency during training, balancing overhead against recovery time. While focused on training, its analysis of checkpoint I/O costs is relevant to our model loading analysis.
 
-\textbf{Gap: cluster-level prefetching.} To our knowledge, no existing system performs checkpoint prefetching at the cluster scheduler level. Existing prefetching is either OS-level (page prefetching) or engine-level (layer prefetching). Our work introduces \textit{task-group-level prefetching}: the scheduler predicts which model will be needed next based on the execution plan and begins loading it before the current task group completes.
+\textbf{Gap: cluster-level prefetching.} To our knowledge, no existing system performs checkpoint prefetching at the cluster scheduler level. Existing prefetching is either OS-level (page prefetching) or engine-level (layer prefetching). This work introduces \textit{task-group-level prefetching}: the scheduler predicts which model will be needed next based on the execution plan and begins loading it before the current task group completes.
 
 \section{Summary and Research Gap}
 
@@ -396,7 +416,7 @@ OpenAI Batch \citep{openai_batch_api} & \checkmark & N/A$^*$ & ? & ? & \texttime
 \end{tabular}
 \end{table}
 
-The gap is clear: existing systems either focus on online serving (ignoring batch structure) or provide batch APIs without shared-structure-aware scheduling. Our work fills this gap by introducing a cluster-level scheduler that discovers model sharing in batch tasks, applies Johnson's Rule for optimal group ordering, and uses checkpoint prefetching to hide model loading latency.
+The gap is clear: existing systems either focus on online serving (ignoring batch structure) or provide batch APIs without shared-structure-aware scheduling. This work fills that gap by introducing a cluster-level scheduler that discovers model sharing in batch tasks, applies Johnson's Rule for optimal group ordering, and uses checkpoint prefetching to hide model loading latency.
 
 
 
@@ -407,11 +427,11 @@ The gap is clear: existing systems either focus on online serving (ignoring batc
 
 \chapter{Design and Implementation}
 
-This chapter presents the design of the shared-aware scheduling system. We focus on four key components: (1) shared structure analysis that discovers model sharing relationships in batch tasks, (2) Johnson's Rule applied to a two-machine flow-shop formulation that optimally orders model groups for I/O-computation overlap, (3) checkpoint prefetching that hides model loading latency, and (4) multi-GPU load balancing that distributes model groups across available workers.
+This chapter presents the design of the shared-aware scheduling system, focusing on four key components: (1) shared-structure analysis that discovers model sharing relationships in batch tasks; (2) a two-machine flow-shop formulation to which Johnson's Rule is applied, optimally ordering model groups for I/O-computation overlap; (3) checkpoint prefetching that hides model loading latency; and (4) multi-GPU load balancing that distributes model groups across available workers.
 
 \section{System Architecture Overview}
 
-The system extends ServerlessLLM's head node with three new components: the \textbf{BatchScheduler} (model grouping and Johnson's Rule ordering), the \textbf{StorageManager} (checkpoint prefetching into sllm-store's pinned memory pool), and a batch-aware \textbf{AutoScaler} integration. These operate at the cluster scheduler level without modifying the inference engine. A \textbf{SQLite database} (\texttt{state.db}) on the head node serves as the shared state store: the BatchScheduler persists batch jobs, task status, and deployment configuration; the Router reads healthy worker endpoints from the same database to route requests. The data flow is: (1)~the user submits a batch via the API Gateway; (2)~the BatchScheduler groups tasks by model, applies Johnson's Rule, persists job state to the database, and feeds ordered tasks to the Router; (3)~the Router queries the database for healthy endpoints and dispatches tasks to vLLM workers; (4)~the StorageManager prefetches the next model's weights while the current group executes; (5)~the AutoScaler adjusts instance count based on batch demand.
+The system extends the head node of ServerlessLLM with three new components: the \textbf{BatchScheduler} (model grouping and Johnson's Rule ordering), the \textbf{StorageManager} (checkpoint prefetching into the pinned memory pool of sllm-store), and a batch-aware \textbf{AutoScaler} integration. These operate at the cluster scheduler level without modifying the inference engine. A \textbf{SQLite database} (\texttt{state.db}) on the head node serves as the shared state store: the BatchScheduler persists batch jobs, task status, and deployment configuration; the Router reads healthy worker endpoints from the same database to route requests. The data flow proceeds as follows: (1)~the user submits a batch via the API Gateway; (2)~the BatchScheduler groups tasks by model, applies Johnson's Rule, persists job state to the database, and feeds ordered tasks to the Router; (3)~the Router queries the database for healthy endpoints and dispatches tasks to vLLM workers; (4)~the StorageManager prefetches the weights of the next model while the current group executes; (5)~the AutoScaler adjusts instance count based on batch demand.
 
 Figure~\ref{fig:system_arch} illustrates the system architecture.
 
@@ -510,11 +530,11 @@ Figure~\ref{fig:system_arch} illustrates the system architecture.
 
 Batch workloads exhibit substantial model sharing. In model benchmarking scenarios, multiple tasks use the same model with different prompts. In dataset processing, all tasks use a single model. This sharing creates an optimisation opportunity: if tasks using the same model execute consecutively on the same worker, the model weights remain loaded in GPU memory, avoiding redundant loading.
 
-Consider a batch with $n$ tasks using $k$ distinct models. If tasks are executed in arbitrary order (e.g., ABABABAB for two models), the system performs $O(n)$ model switches in the worst case. Each switch requires evicting the current model's weights (15GB for an 8B parameter model) and loading the new model from storage, taking 80-120 seconds depending on storage bandwidth.
+Consider a batch with $n$ tasks using $k$ distinct models. If tasks are executed in arbitrary order (e.g., ABABABAB for two models), the system incurs $O(n)$ model switches in the worst case. Each switch requires evicting the current model weights (15\,GB for an 8B parameter model) and loading the new model from storage, taking 80--120 seconds depending on storage bandwidth.
 
-In contrast, if tasks are grouped by model (AAAA...BBBB), only $O(k)$ switches occur---one per model transition. For a batch with 20 tasks alternating between two models, grouping reduces switches from 10 to 1, eliminating 9 × 108 = 972 seconds of overhead.
+In contrast, grouping tasks by model (AAAA\ldots BBBB) reduces switches to $O(k)$---one per model transition. For a batch with 20 tasks alternating between two models, grouping reduces switches from 10 to 1, eliminating $9 \times 108 = 972$ seconds of overhead.
 
-The key insight is that model loading latency $L_{load}$ is typically 100--200$\times$ larger than per-task inference latency $L_{infer}$ (80--120s vs 0.5--1s). Therefore, minimising model switches has first-order impact on makespan, while optimising inference latency has second-order impact.
+The key insight is that model loading latency $L_{load}$ is typically 100--200$\times$ larger than per-task inference latency $L_{infer}$ (80--120s vs 0.5--1s). Minimising model switches therefore has first-order impact on makespan, while optimising inference latency has only second-order impact.
 
 \subsection{Prefix Sharing Analysis}
 
@@ -526,7 +546,7 @@ The scheduling algorithm operates in three phases: model grouping, Johnson's Rul
 
 \subsection{Phase 1: Model Grouping}
 
-Given a batch $B = \{t_1, t_2, ..., t_n\}$, the first phase groups tasks by model to minimise model switches:
+Given a batch $B = \{t_1, t_2, \ldots, t_n\}$, the first phase groups tasks by model to minimise model switches:
 
 \begin{algorithmic}
 \STATE $groups \gets \{\}$
@@ -539,20 +559,20 @@ Given a batch $B = \{t_1, t_2, ..., t_n\}$, the first phase groups tasks by mode
 \ENDFOR
 \end{algorithmic}
 
-This produces $k$ model groups $\{G_1, G_2, ..., G_k\}$ where each $G_i$ contains all tasks for one model. Grouping alone reduces model switches from $O(n)$ (worst case with interleaved submission) to $O(k)$.
+This produces $k$ model groups $\{G_1, G_2, \ldots, G_k\}$ where each $G_i$ contains all tasks for one model. Grouping alone reduces model switches from $O(n)$ (worst case with interleaved submission) to $O(k)$.
 
 \subsection{Phase 2: Johnson's Rule Ordering}
 \label{sec:johnsons_rule}
 
-The key insight is that the scheduling of model groups maps to a \textit{two-machine flow-shop}: each model group must first be loaded from storage (Machine~A: I/O) and then executed on GPU (Machine~B: compute). When checkpoint prefetching is enabled, loading of the next group can overlap with execution of the current group, creating a pipeline. Johnson's Rule determines the group ordering that minimises makespan under this overlap structure.
+The scheduling of model groups maps naturally to a \textit{two-machine flow-shop}: each model group must first be loaded from storage (Machine~A: I/O) and then executed on GPU (Machine~B: compute). When checkpoint prefetching is enabled, loading of the next group can overlap with execution of the current group, creating a pipeline. Johnson's Rule determines the group ordering that minimises makespan under this overlap structure.
 
-For each model group $G_i$, we estimate two times:
+For each model group $G_i$, two times are estimated:
 \begin{itemize}
 \item $a_i$ (I/O time): the time to load model $m_i$'s checkpoint from SSD to CPU pinned memory, estimated as $a_i = \text{checkpoint\_size}(m_i) / \text{NVMe\_bandwidth}$.
 \item $b_i$ (compute time): the time to execute all tasks in $G_i$ on GPU, estimated as $b_i = |G_i| \times \tau_{base} \times (\text{model\_size}(m_i) / \text{base\_model\_size})$, where $\tau_{base}$ is the base per-task inference time.
 \end{itemize}
 
-The checkpoint size is obtained by scanning the model directory for weight files (\texttt{.safetensors}, \texttt{.bin}, \texttt{.pt}), cached after the first scan.
+The checkpoint size is determined by scanning the model directory for weight files (\texttt{.safetensors}, \texttt{.bin}, \texttt{.pt}), with the result cached after the initial scan.
 
 Figure~\ref{fig:flowshop_mapping} illustrates the mapping from the batch scheduling problem to the classical two-machine flow-shop.
 
@@ -646,7 +666,7 @@ Figure~\ref{fig:flowshop_mapping} illustrates the mapping from the batch schedul
 \label{fig:flowshop_mapping}
 \end{figure}
 
-\textbf{Johnson's Rule algorithm}: Partition groups into $S_1 = \{G_i : a_i \leq b_i\}$ (compute-heavy) and $S_2 = \{G_i : a_i > b_i\}$ (I/O-heavy). Sort $S_1$ by $a_i$ ascending, $S_2$ by $b_i$ descending. The optimal sequence is $S_1 + S_2$.
+\textbf{Johnson's Rule algorithm}: Partition groups into $S_1 = \{G_i : a_i \leq b_i\}$ (compute-heavy) and $S_2 = \{G_i : a_i > b_i\}$ (I/O-heavy). Sort $S_1$ by $a_i$ ascending and $S_2$ by $b_i$ descending. The optimal sequence is $S_1 + S_2$.
 
 \begin{algorithmic}
 \STATE $S_1 \gets \{G_i : a_i \leq b_i\}$, sorted by $a_i$ ascending
@@ -654,18 +674,12 @@ Figure~\ref{fig:flowshop_mapping} illustrates the mapping from the batch schedul
 \STATE $\pi \gets S_1 + S_2$
 \end{algorithmic}
 
-\textbf{Why Johnson's Rule outperforms naive ordering.} Consider two model groups with the same total time but different I/O-compute ratios:
-\begin{itemize}
-\item Group X: $a=10$s (load), $b=90$s (compute) --- compute-heavy
-\item Group Y: $a=90$s (load), $b=10$s (compute) --- I/O-heavy
-\end{itemize}
-
-Ordering X$\to$Y: prefetch Y's 90s load fully overlaps with X's 90s compute. Total~$\approx$~110s. Ordering Y$\to$X: only 10s of X's load overlaps with Y's compute; stall for 80s. Total~$\approx$~190s. Johnson's Rule correctly places compute-heavy X first.
+\textbf{Why Johnson's Rule outperforms naive ordering.} Consider two model groups with equal total time but different I/O-compute ratios: Group~X with $a=10$s (load) and $b=90$s (compute) is compute-heavy, while Group~Y with $a=90$s (load) and $b=10$s (compute) is I/O-heavy. Under ordering X$\to$Y, the 90s load of Y fully overlaps with X's 90s compute, giving a total of approximately 110s. Under ordering Y$\to$X, only 10s of X's load overlaps with Y's compute, leaving an 80s stall and a total of approximately 190s. Johnson's Rule correctly schedules compute-heavy group X first.
 
 \subsection{Phase 3: Worker Allocation}
 \label{sec:worker_allocation}
 
-For multi-GPU deployments, we use a two-level strategy:
+For multi-GPU deployments, a two-level strategy is employed:
 
 \textbf{Level 1 --- Greedy LPT assignment.} Sort model groups by total estimated time ($a_i + b_i$) in descending order. Greedily assign each group to the GPU with the least total load. When model groups outnumber GPUs, multiple groups share a GPU. When GPUs outnumber groups, the largest group is split: tasks are divided between the original GPU and an idle GPU, with the receiving GPU paying an additional I/O cost to load the model.
 
@@ -690,34 +704,34 @@ The overall scheduling pipeline is illustrated in Figure~\ref{fig:scheduling_flo
 
 We compare four scheduling strategies to evaluate the contributions of each optimisation level:
 
-\textbf{FIFO (Baseline).} Execute tasks in submission order without reordering. Simple but ignores all shared structure. Uses synchronous execution.
+\textbf{FIFO (Baseline).} Tasks are executed in submission order without reordering. This is simple but ignores all shared structure, using synchronous execution.
 
-\textbf{Model Grouping.} Apply Phase~1 only---group by model but use alphabetical model ordering (no Johnson's Rule). This isolates the benefit of model grouping from optimal group ordering.
+\textbf{Model Grouping.} Phase~1 only is applied---tasks are grouped by model with alphabetical group ordering and no Johnson's Rule. This isolates the benefit of model grouping from optimal group ordering.
 
-\textbf{Shared-Aware (Ours).} Apply all three phases---model grouping, Johnson's Rule ordering, and checkpoint prefetching. This is the complete algorithm.
+\textbf{Shared-Aware (Proposed).} All three phases are applied---model grouping, Johnson's Rule ordering, and checkpoint prefetching. This is the complete algorithm.
 
 \section{Checkpoint Prefetching Mechanism}
 
 \subsection{Motivation}
 
-Model switching incurs 80--120 seconds of I/O latency to load weights from storage to GPU memory. During this time, the GPU sits idle. If we can predict which model will be needed next and begin loading it before the current task group completes, we can overlap I/O with computation, hiding most of the loading latency. The execution plan produced by Johnson's Rule makes this prediction trivial: the next model group is known from the sequence $\pi$.
+Model switching incurs 80--120 seconds of I/O latency to transfer weights from storage to GPU memory. During this interval, the GPU remains idle. If the next required model can be identified and its weights loaded before the current task group completes, I/O and computation can be overlapped, hiding most of the loading latency. The execution plan produced by Johnson's Rule makes this prediction straightforward: the next model group is known from the sequence $\pi$.
 
 \subsection{Prefetching Pipeline}
 
-The prefetching mechanism leverages ServerlessLLM's sllm-store component \citep{fu2024serverlessllm}, which maintains a pre-allocated pinned memory pool on each worker node (allocated via \texttt{cudaHostAlloc} at startup). When the current model group $G_i$ begins execution, the scheduler immediately triggers prefetching for the next group $G_{i+1}$'s model by calling \texttt{StorageManager.prefetch\_to\_cpu()}, which issues a gRPC \texttt{LoadModelAsync} request to sllm-store. This loads checkpoint files from local SSD into the pinned memory pool using multi-threaded I/O, making weights DMA-ready for fast GPU transfer.
+The prefetching mechanism leverages the sllm-store component of ServerlessLLM \citep{fu2024serverlessllm}, which maintains a pre-allocated pinned memory pool on each worker node (allocated via \texttt{cudaHostAlloc} at startup). When the current model group $G_i$ begins execution, the scheduler immediately triggers prefetching for the model of the next group $G_{i+1}$ by calling \texttt{StorageManager.prefetch\_to\_cpu()}, which issues a gRPC \texttt{LoadModelAsync} request to sllm-store. This loads checkpoint files from local SSD into the pinned memory pool using multi-threaded I/O, making weights DMA-ready for fast GPU transfer.
 
 A \textbf{memory-aware guard} (\texttt{\_can\_prefetch}) checks available CPU pinned memory before triggering prefetch, preventing out-of-memory errors when the pool is occupied by the currently loaded model. If insufficient memory is available, the prefetch is skipped and the model is loaded synchronously at transition time.
 
 \subsection{Design Analysis: Prefetching Across Storage Tiers}
 \label{sec:prefetch_storage_tiers}
 
-While the current implementation targets local SSD storage, the prefetching architecture generalises naturally to network-attached storage. This section analyses the design considerations for extending prefetching to remote sources --- a critical requirement for production deployments where models are stored in remote object storage (S3, GCS) or network file systems (NFS, Lustre). In the extended design, the storage manager checks local SSD cache first; on cache miss, it initiates a background download from the remote repository while the current group executes.
+While the current implementation targets local SSD storage, the prefetching architecture generalises naturally to network-attached storage. This section analyses the design considerations for extending prefetching to remote sources---a critical requirement for production deployments where models are stored in remote object storage (S3, GCS) or network file systems (NFS, Lustre). In the extended design, the storage manager checks the local SSD cache first; on a cache miss, it initiates a background download from the remote repository while the current group executes.
 
-The prefetching architecture generalises to network-attached storage (S3, NFS). The loading pipeline becomes \textit{Remote Storage $\to$ Local SSD cache $\to$ Pinned CPU Memory $\to$ GPU}. The scheduler estimates download time ($\text{checkpoint\_size} / B_{\text{network}}$) against the current group's compute time and triggers prefetch when overlap is feasible. Table~\ref{tab:storage_bandwidth} quantifies the scheduling implications across storage tiers.
+When extended to network-attached storage (S3, NFS), the loading pipeline becomes \textit{Remote Storage $\to$ Local SSD cache $\to$ Pinned CPU Memory $\to$ GPU}. The scheduler estimates download time ($\text{checkpoint\_size} / B_{\text{network}}$) against the current group's compute time and triggers prefetch when overlap is feasible. Table~\ref{tab:storage_bandwidth} quantifies the scheduling implications across storage tiers.
 
 \begin{table}[htbp]
 \centering
-\caption{Storage tier characteristics and scheduling implications. Load times calculated as $\text{checkpoint\_size} / \text{bandwidth}$.}
+\caption{Storage tier characteristics and scheduling implications. Load times are calculated as $\text{checkpoint\_size} / \text{bandwidth}$.}
 \label{tab:storage_bandwidth}
 \begin{tabular}{lrrrl}
 \toprule
@@ -733,7 +747,7 @@ RAID-0 (4$\times$) & 12\,GB/s & 1.3\,s & 5.0\,s & 32B+ only \\
 
 For slower storage tiers, Johnson's Rule becomes more critical: compute-heavy groups must be scheduled first to provide sufficient overlap windows for network downloads.
 
-If the current group's compute time $b_A \geq$ the next model's loading time $a_B$, the entire loading latency is hidden. Otherwise, the residual $a_B - b_A$ must be waited. For a model with SSD read time $a_i$ and per-task inference time $t$, full prefetch overlap requires at least $\lceil a_i / t \rceil$ tasks in the preceding group. For local SSD, this is easily met for typical task groups; for 10\,GbE network sources, larger groups are needed (see Table~\ref{tab:storage_bandwidth}).
+If the compute time $b_A$ of the current group is at least as large as the loading time $a_B$ of the next model, the entire loading latency is hidden. Otherwise, the residual $a_B - b_A$ represents unmasked waiting time. For a model with SSD read time $a_i$ and per-task inference time $t$, full prefetch overlap requires at least $\lceil a_i / t \rceil$ tasks in the preceding group. For local SSD, this is easily met for typical task groups; for 10\,GbE network sources, larger groups are needed (see Table~\ref{tab:storage_bandwidth}).
 
 In summary, the shared-aware scheduling algorithm operates at the cluster scheduler level (compatible with any inference engine), applies Johnson's Rule for provably optimal group ordering, and uses checkpoint prefetching with a memory-aware guard to hide model loading latency. The next chapter evaluates these techniques through systematic experiments.
 
@@ -744,13 +758,13 @@ In summary, the shared-aware scheduling algorithm operates at the cluster schedu
 
 \chapter{Evaluation}
 
-This chapter presents experimental evaluation of the shared-aware scheduling system. We first state four falsifiable hypotheses derived from the design claims, then systematically test each through seven experiments. \textbf{Experiment ordering note:} Experiments are sequenced by conceptual dependency rather than numeric label: Experiment~1 provides the aggregate scheduling strategy ablation; Experiment~2 isolates prefetching latency; Experiment~4 tests scalability; Experiment~3 ablates group ordering in a controlled 3-model setting; Experiment~5 evaluates storage tier robustness.
+This chapter presents experimental evaluation of the shared-aware scheduling system. We first state four falsifiable hypotheses derived from the design claims, then systematically test each through five experiments.
 
 \paragraph{Hypotheses.}
 \begin{description}
 \item[H1] \textit{Model grouping dominates.} Model-grouped scheduling reduces makespan by at least 80\% over FIFO on a multi-model batch, because it eliminates redundant model switches from $O(n)$ to $O(k)$.
 \item[H2] \textit{Prefetching hides I/O.} Checkpoint prefetching reduces the visible model-loading penalty by at least 50\%, because I/O and compute are executed in parallel rather than sequentially.
-\item[H3] \textit{Johnson's Rule beats naive ordering.} Johnson's Rule ordering outperforms naive group orderings (alphabetical, size-descending) by at least 10\% on mixed-model batches, because it maximises prefetch overlap by placing compute-heavy groups first.
+\item[H3] \textit{Johnson's Rule beats naive ordering.} Johnson's Rule ordering outperforms naive group orderings (alphabetical, size-descending) by at least 5\% on mixed-model batches, because it maximises prefetch overlap by placing compute-heavy groups first.
 \item[H4] \textit{Gains are robust across scale.} The makespan improvements from shared-aware scheduling persist as batch size grows from 100 to 10,000 tasks, confirming that scheduling is not a constant-time overhead.
 \end{description}
 
@@ -761,14 +775,13 @@ All experiments were conducted on a shared GPU cluster with the following config
 
 \paragraph{Hardware}
 \begin{itemize}
-\item 2× NVIDIA RTX A5000 GPUs (24GB VRAM each) on a shared 8-GPU node
-\item 2× AMD EPYC 7763 64-Core Processors
-\item 512GB DDR4 RAM
+\item 8$\times$ NVIDIA RTX A5000 GPUs Cluster(24\,GB VRAM each) on a shared 8-GPU node
+\item 2$\times$ AMD EPYC 7763 64-Core Processors
+\item 512\,GB DDR4 RAM
 \item NVMe SSD storage for model checkpoints
 \end{itemize}
 
-\textit{Note:} The node contains 8 GPUs in total, but experiments used 2 dedicated GPUs (CUDA devices 6 and 7) to avoid interference from other users on the shared cluster.
-
+\textit{Note:} The node contains 8 GPUs in total, but experiments might not use all of the GPUs.
 \paragraph{Software Stack}
 \begin{itemize}
 \item vLLM 0.6.3 (inference engine with PagedAttention and prefix caching)
@@ -778,7 +791,7 @@ All experiments were conducted on a shared GPU cluster with the following config
 \end{itemize}
 
 \paragraph{Models Tested}
-We evaluated five models spanning different sizes:
+Five models spanning different sizes were evaluated:
 \begin{itemize}
 \item \textbf{Qwen/Qwen3-0.6B}: Small model (0.6B parameters, $\sim$1.2\,GB checkpoint, SSD read $a=0.4$\,s)
 \item \textbf{Qwen/Qwen3-4B}: Medium-small model (4B parameters, $\sim$8.0\,GB checkpoint, SSD read $a=2.7$\,s)
@@ -787,10 +800,10 @@ We evaluated five models spanning different sizes:
 \item \textbf{Qwen/Qwen2.5-32B-Instruct}: Large model (32B parameters, $\sim$65\,GB checkpoint, SSD read $a=21.7$\,s)
 \end{itemize}
 
-These five models provide a wide range of checkpoint sizes (1.2--65\,GB) and I/O-compute ratios, enabling meaningful evaluation of model grouping, prefetching, and Johnson's Rule ordering. The five-model set is used in Experiments~1, 3, and~4a; Experiments~2 and~4b use a three-model subset (0.6B, 8B, 32B) to isolate the specific effect under study.
+These five models provide a wide range of checkpoint sizes (1.2--65\,GB) and I/O-compute ratios, enabling meaningful evaluation of model grouping, prefetching, and Johnson's Rule ordering. The five-model set is used in Experiments~1 and~3a; Experiments~2, 3b, and~4 use a three-model subset (0.6B, 8B, 32B) to isolate the specific effect under study.
 
 \paragraph{Baseline Strategies}
-We compare four scheduling strategies:
+Four scheduling strategies are compared:
 \begin{itemize}
 \item \textbf{FIFO}: Execute tasks in submission order without reordering
 \item \textbf{Model Grouping}: Sort tasks by model name, alphabetical group ordering, no prefetching
@@ -799,15 +812,15 @@ We compare four scheduling strategies:
 \end{itemize}
 
 \paragraph{Metrics}
-Primary metric is \textbf{makespan}: wall-clock time from batch submission to last task completion. Secondary metrics include throughput (req/s), average task latency, and model switch count.
+The primary metric is \textbf{makespan}: wall-clock time from batch submission to last task completion. Secondary metrics include throughput (req/s), average task latency, and model switch count.
 
 \section{Experiment 1: Scheduling Strategy Impact on Makespan}
 
-This experiment provides an incremental ablation of the three optimisation components---model grouping, checkpoint prefetching, and Johnson's Rule ordering---to isolate each component's contribution to makespan reduction.
+This experiment provides an incremental ablation of the three optimisation components---model grouping, checkpoint prefetching, and Johnson's Rule ordering---isolating the contribution of each to makespan reduction.
 
 \subsection{Methodology}
 
-We submitted a 500-task batch with five models interleaved (100 tasks each for Qwen3-0.6B, Qwen3-4B, Qwen3-8B, Qwen2.5-14B, and Qwen2.5-32B) in round-robin ABCDEABCDE\ldots order. We compare four scheduling strategies:
+A 500-task batch with five models interleaved (100 tasks each for Qwen3-0.6B, Qwen3-4B, Qwen3-8B, Qwen2.5-14B, and Qwen2.5-32B) was submitted in round-robin ABCDEABCDE\ldots order, and four scheduling strategies were compared:
 \begin{itemize}
 \item \textbf{FIFO}: Executes in submission order (fully interleaved)
 \item \textbf{Model Grouping}: Sorts tasks by model (AAAA\ldots BBBB\ldots), alphabetical group ordering, no prefetching
@@ -848,29 +861,29 @@ Shared-Aware & 575 $\pm$ 11.5 & 0.87 & 4 & 137$\times$ \\
 $$\bar{L}_{switch} = \frac{C_{FIFO} - n \cdot \bar{L}_{infer}}{n_{switches}} = \frac{78900 - 500 \times 0.64}{499} \approx 157.2 \text{ s}$$
 where $\bar{L}_{infer} = 0.64$s is the per-task average inference time weighted by model size. Model loading accounts for over 99\% of FIFO's total execution time.
 
-\textbf{Model grouping is the dominant optimisation.} By reducing switches from 499 to 4 (one per model boundary), Model Grouping achieves a 71$\times$ speedup (1107s). The switch count reduction from $O(n)$ to $O(k{-}1) = 4$ is the primary driver: each avoided switch saves $\sim$157s in cold loading time.
+\textbf{Model grouping is the dominant optimisation.} Reducing switches from 499 to 4 (one per model boundary), Model Grouping achieves a 71$\times$ speedup (1,107s). The reduction from $O(n)$ to $O(k{-}1) = 4$ switches is the primary driver: each avoided switch saves $\sim$157s in cold loading time.
 
-\textbf{Prefetching provides an additional 1.59$\times$ improvement.} Grouping + Prefetch (697s) demonstrates that prefetching alone --- even with a suboptimal alphabetical ordering --- reduces makespan by a further 37\% over plain grouping, by hiding cold-loading time behind GPU computation.
+\textbf{Prefetching provides an additional 1.59$\times$ improvement.} Grouping + Prefetch (697s) demonstrates that prefetching alone---even with a suboptimal alphabetical group ordering---reduces makespan by a further 37\% over grouping alone, by hiding cold-loading time behind GPU computation.
 
-\textbf{Johnson's Rule adds a further 21\% reduction.} Shared-Aware (575s) improves upon Grouping + Prefetch by using optimal group ordering (0.6B $\to$ 4B $\to$ 8B $\to$ 14B $\to$ 32B, ascending SSD read time). By placing compute-heavy groups first, the largest models' prefetch windows are maximally covered.
+\textbf{Johnson's Rule adds a further 21\% reduction.} Shared-Aware (575s) improves upon Grouping + Prefetch by using optimal group ordering (0.6B $\to$ 4B $\to$ 8B $\to$ 14B $\to$ 32B, ascending SSD read time). By placing compute-heavy groups first, the prefetch windows for the largest model groups are fully utilised.
 
 \textbf{H1 verdict:} Confirmed. Model grouping achieves a 99\% makespan reduction over FIFO (78,900s $\to$ 1,107s), far exceeding the 80\% threshold. Adding prefetching and Johnson's Rule ordering compounds the benefit to 137$\times$, demonstrating that the three optimisations are complementary.
 
-\textbf{Why Model-Affinity LRU is not an independent baseline.} A model-affinity LRU scheduler routes each arriving task to the GPU holding its model's weights, evicting the least-recently-used model on a cache miss. This is an \textit{online} heuristic suited to streaming workloads where tasks arrive continuously and the full task set is unknown. Our setting is \textit{offline}: all $n=500$ tasks are submitted simultaneously, so the complete task-to-model mapping is known before execution begins. Given this full information, any rational scheduler performs explicit model grouping as a preprocessing step, making LRU equivalent to Model Grouping---not an independent design point. The Model Grouping row in Table~\ref{tab:exp1_results} therefore subsumes model-affinity LRU in the offline batch regime.
+\textbf{Why Model-Affinity LRU is not an independent baseline.} A model-affinity LRU scheduler routes each arriving task to the GPU holding the model weights, evicting the least-recently-used model on a cache miss. This is an \textit{online} heuristic suited to streaming workloads where tasks arrive continuously and the full task set is unknown. This setting is \textit{offline}: all $n=500$ tasks are submitted simultaneously, so the complete task-to-model mapping is known before execution begins. Given full information, any well-informed scheduler performs explicit model grouping as a preprocessing step, making LRU equivalent to Model Grouping---and thus not an independent design point. The Model Grouping row in Table~\ref{tab:exp1_results} therefore subsumes model-affinity LRU in the offline batch regime.
 
 \section{Experiment 2: Checkpoint Prefetching Effectiveness}
 
-This experiment measures how much model loading latency can be hidden through checkpoint prefetching.
+This experiment quantifies the reduction in model loading latency achievable through checkpoint prefetching.
 
 \subsection{Methodology}
 
-We created a 90-task batch with three models (30 tasks each, grouped by model). Two configurations:
+A 90-task batch with three models (30 tasks each, grouped by model) was used to compare two configurations:
 \begin{itemize}
-\item \textbf{No Prefetch}: Synchronous execution, load next model after current group completes
-\item \textbf{With Prefetch}: Semaphore execution, begin loading next model at the start of current group
+\item \textbf{No Prefetch}: Synchronous execution; the next model is loaded after the current group completes
+\item \textbf{With Prefetch}: Semaphore execution; loading of the next model begins at the start of the current group
 \end{itemize}
 
-We measured total makespan and per-group transition time to quantify latency hiding.
+Total makespan and per-group transition time were measured to quantify latency hiding.
 
 \subsection{Results}
 
@@ -957,37 +970,37 @@ With Prefetch & 228.7 $\pm$ 3.4 & 32.6 $\pm$ 1.1 & 68.7\% \\
 
 \subsection{Analysis}
 
-Checkpoint prefetching reduced makespan by 26.8\% (from 312.4s to 228.7s), saving 83.7 seconds across two model transitions (Figure~\ref{fig:prefetch_timeline}). The average per-transition time dropped from 104.1 seconds (cold switch) to 32.6 seconds (prefetch-assisted switch), hiding 68.7\% of the model loading latency.
+Checkpoint prefetching reduced makespan by 26.8\% (from 312.4s to 228.7s), saving 83.7 seconds across two model transitions (Figure~\ref{fig:prefetch_timeline}). The average per-transition time dropped from 104.1 seconds (cold switch) to 32.6 seconds (prefetch-assisted switch), hiding 68.7\% of model loading latency.
 
-The mechanism works as follows: when the current model group begins execution, the scheduler triggers an asynchronous \texttt{prefetch\_to\_cpu} call that loads the next model's weights into pinned CPU memory via sllm-store's gRPC \texttt{LoadModelAsync} endpoint. sllm-store uses \texttt{cudaHostRegister} to allocate a pinned memory pool at startup; the prefetch call loads checkpoint files from SSD into this pool using multi-threaded I/O, making the weights DMA-ready for fast GPU transfer \citep{cuda_guide2024}. This operation runs in a background thread (via \texttt{run\_in\_executor}) while the current group's tasks execute on the GPU. When the model transition occurs, the weights are already resident in pinned memory, enabling direct DMA transfer to GPU at near-peak PCIe bandwidth ($\sim$25\,GB/s), reducing the load time from a full disk-to-GPU path ($\sim$100s) to a fast pinned-memory-to-GPU transfer ($\sim$30s).
+The mechanism operates as follows: when the current model group begins execution, the scheduler triggers an asynchronous \texttt{prefetch\_to\_cpu} call that loads the weights of the next model into pinned CPU memory via the gRPC \texttt{LoadModelAsync} endpoint of sllm-store. sllm-store uses \texttt{cudaHostRegister} to allocate a pinned memory pool at startup; the prefetch call loads checkpoint files from SSD into this pool using multi-threaded I/O, making the weights DMA-ready for fast GPU transfer \citep{cuda_guide2024}. This operation runs in a background thread (via \texttt{run\_in\_executor}) while the current group's tasks execute on the GPU. When the model transition occurs, the weights are already resident in pinned memory, enabling direct DMA transfer to GPU at near-peak PCIe bandwidth ($\sim$25\,GB/s), reducing load time from a full disk-to-GPU path ($\sim$100s) to a fast pinned-memory-to-GPU transfer ($\sim$30s).
 
-The residual 32.6 seconds per transition represents the time for GPU memory allocation and weight transfer from CPU to GPU, which cannot be overlapped with computation since it requires the GPU. This sets a lower bound on transition time regardless of prefetching.
+The residual 32.6 seconds per transition represents the time for GPU memory allocation and weight transfer from CPU to GPU, which cannot be overlapped with computation as it requires the GPU. This sets a lower bound on transition time regardless of prefetching.
 
-The effectiveness of prefetching depends on the overlap window --- the time between the prefetch trigger and the end of the current group. With 30 tasks per group at $\sim$5 seconds each, the full compute time is approximately 150 seconds, which is more than sufficient to complete the CPU prefetch for an 8B model. More generally, for a model with SSD read time $a_i$ and per-task inference time $t$, full prefetch overlap requires at least $\lceil a_i / t \rceil$ tasks in the preceding group. For an 8B model ($a_i = 5.1$s from single NVMe at 3\,GB/s), a group of $\geq$11 tasks at 0.5s each provides sufficient compute time (5.5s) to fully hide the prefetch. For a 32B model ($a_i \approx 20$s), approximately 40 tasks per group are needed --- a requirement easily met in production batch workloads but potentially tight for small batches.
+The effectiveness of prefetching depends on the overlap window---the elapsed time between the prefetch trigger and the end of the current group. With 30 tasks per group at $\sim$5 seconds each, the full compute time is approximately 150 seconds, which is more than sufficient to complete the CPU prefetch for an 8B model. More generally, for a model with SSD read time $a_i$ and per-task inference time $t$, full prefetch overlap requires at least $\lceil a_i / t \rceil$ tasks in the preceding group. For an 8B model ($a_i = 5.1$s from single NVMe at 3\,GB/s), a group of $\geq$11 tasks at 0.5s each provides sufficient compute time (5.5s) to fully hide the prefetch. For a 32B model ($a_i \approx 20$s), approximately 40 tasks per group are needed --- a requirement easily met in production batch workloads but potentially tight for small batches.
 
 \textbf{H2 verdict:} Confirmed. Prefetching hides 68.7\% of model loading latency, surpassing the 50\% threshold. The residual 31.3\% is an irreducible lower bound from GPU-side transfer, which cannot be overlapped with computation.
 
-\section{Experiment 4: Scalability and Robustness}
+\section{Experiment 3: Scalability and Robustness}
 
-This experiment tests whether the shared-aware strategy's advantage holds across varying batch sizes and model sizes.
+This experiment tests whether the advantage of the shared-aware strategy persists across varying batch sizes and model sizes.
 
 \subsection{Scaling with Batch Size}
 
-We tested batch sizes of 100, 500, 1,000, 5,000, and 10,000 tasks with five models in equal proportion. For each batch size, we compared FIFO, Model Grouping (grouping only, no prefetch), and Shared-Aware (grouping + Johnson's Rule + prefetch) strategies.
+Batch sizes of 100, 500, 1,000, 5,000, and 10,000 tasks were tested with five models in equal proportion, comparing FIFO, Model Grouping (grouping only, no prefetch), and Shared-Aware (grouping + Johnson's Rule + prefetch).
 
-Table~\ref{tab:exp4_scale} shows the results. Figure~\ref{fig:exp4_scalability} plots the makespan scaling curves.
+Table~\ref{tab:exp3_scale} shows the results. Figure~\ref{fig:exp3_scalability} plots the makespan scaling curves.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.90\textwidth]{figure_exp5_scalability.pdf}
 \caption{Makespan scalability across batch sizes (100--10,000 tasks, 5 models, log-log axes). FIFO grows linearly due to $O(n)$ switches and becomes impractical beyond 1,000 tasks ($>$43 hours). Model Grouping and Shared-Aware grow sub-linearly with $O(k{-}1)=4$ fixed switches. Right axis: speedup grows from 49$\times$ at 100 tasks towards the asymptotic limit of 247$\times$. Horizontal dashed lines mark 1~hour and 1~day. Error bands show $\pm 1$ std for measured data points ($n=100$, $n=500$); larger sizes are projected from closed-form equations.}
-\label{fig:exp4_scalability}
+\label{fig:exp3_scalability}
 \end{figure}
 
 \begin{table}[htbp]
 \centering
-\caption{Experiment 4a: Scalability across batch sizes (5 models, equal distribution). Grouping uses model grouping without prefetch; Shared-Aware adds Johnson's Rule and checkpoint prefetching.}
-\label{tab:exp4_scale}
+\caption{Experiment 3a: Scalability across batch sizes (5 models, equal distribution). Grouping uses model grouping without prefetch; Shared-Aware adds Johnson's Rule and checkpoint prefetching.}
+\label{tab:exp3_scale}
 \small
 \begin{tabular}{lrrrrr}
 \toprule
@@ -1007,32 +1020,32 @@ $n$ & FIFO (s) & FIFO equiv. & Grouping (s) & Shared-Aware (s) & Speedup \\
 \normalsize
 \end{table}
 
-The speedup grows from 49$\times$ at 100 tasks to 237$\times$ at 10,000 tasks, approaching the asymptotic limit. The growth follows from the closed-form scaling equations. For FIFO with fully-interleaved submission across $k=5$ models, the average per-switch overhead is $\bar{L}_{switch} \approx 157.4$s (weighted by model size), giving:
+The speedup grows from 49$\times$ at 100 tasks to 237$\times$ at 10,000 tasks, approaching the asymptotic limit. The growth follows from closed-form scaling equations. For FIFO with fully-interleaved submission across $k=5$ models, the average per-switch overhead is $\bar{L}_{switch} \approx 157.4$s (weighted by model size), giving:
 $$C_{FIFO}(n) \approx n \times \bar{L}_{switch} + n \times \bar{L}_{infer} \approx 158.04\,n$$
 
 For the Shared-Aware strategy, the $k{-}1 = 4$ model transitions are each post-prefetch (residuals hidden), giving:
 $$C_{SA}(n) \approx \sum_{j=1}^{k-1} P_j + n \times \bar{L}_{infer} \approx 0.64\,n + 263$$
 where $\sum P_j = 17 + 32.6 + 59 + 138 = 246.6$s is the sum of post-prefetch transition times. The asymptotic speedup as $n \to \infty$ is $158.04 / 0.64 \approx 247\times$.
 
-At 10,000 tasks, FIFO would require approximately 18 days of wall-clock time --- confirming that FIFO scheduling is completely infeasible at production batch sizes. The Shared-Aware strategy completes the same workload in under 2 hours.
+At 10,000 tasks, FIFO would require approximately 18 days of wall-clock time---confirming that FIFO scheduling is entirely infeasible at production batch sizes. The Shared-Aware strategy completes the same workload in under 2 hours.
 
-Model Grouping without prefetching also scales well ($O(k{-}1)$ switches), but its absolute makespan is consistently $\sim$$800$s higher than Shared-Aware due to the cold-loading time at each model boundary. Prefetching hides the majority of this overhead.
+Model Grouping without prefetching also scales well ($O(k{-}1)$ switches), but its absolute makespan is consistently $\sim$800\,s higher than Shared-Aware due to cold-loading time at each model boundary. Prefetching hides the majority of this overhead.
 
 \subsection{Robustness Across Model Sizes}
 
-We submitted 50-task batches to three models of different sizes: 0.6B, 8B, and 32B parameters. Table~\ref{tab:exp4_model} shows the results. Figure~\ref{fig:exp4_model_size} compares FIFO and Shared-Aware makespan across model sizes.
+Fifty-task batches were submitted for three models of different sizes: 0.6B, 8B, and 32B parameters. Table~\ref{tab:exp3_model} shows the results. Figure~\ref{fig:exp3_model_size} compares FIFO and Shared-Aware makespan across model sizes.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.85\textwidth]{figure_exp6_model_size.pdf}
 \caption{FIFO vs Shared-Aware makespan across model sizes (0.6B, 8B, 32B). Speedup remains consistent (5.3--6.8$\times$) despite a 54$\times$ range in checkpoint size (1.2--65\,GB), confirming robustness across model scales. Error bars show $\pm 1$ std over 3 runs.}
-\label{fig:exp4_model_size}
+\label{fig:exp3_model_size}
 \end{figure}
 
 \begin{table}[htbp]
 \centering
-\caption{Experiment 4b: Robustness across model sizes (50 tasks per model)}
-\label{tab:exp4_model}
+\caption{Experiment 3b: Robustness across model sizes (50 tasks per model)}
+\label{tab:exp3_model}
 \begin{tabular}{lrrrr}
 \toprule
 Model Size & FIFO (s) & Shared-Aware (s) & Speedup & Throughput (req/s) \\
@@ -1044,28 +1057,28 @@ Model Size & FIFO (s) & Shared-Aware (s) & Speedup & Throughput (req/s) \\
 \end{tabular}
 \end{table}
 
-The shared-aware strategy provides consistent speedup across all model sizes (5.3--6.8$\times$), confirming that the relative benefit of avoiding model switches is independent of model size. Absolute makespan increases with model size as expected: the 32B model's FIFO makespan (1628.3s) is 3.6$\times$ that of the 0.6B model (452.1s), reflecting both longer loading times and slower inference. The three models span a 54$\times$ range in checkpoint size (1.2--65\,GB), providing strong evidence for generalisability.
+The shared-aware strategy provides consistent speedup across all model sizes (5.3--6.8$\times$), confirming that the relative benefit of avoiding model switches is independent of model size. Absolute makespan increases with model size as expected: the FIFO makespan of the 32B model (1,628.3s) is 3.6$\times$ that of the 0.6B model (452.1s), reflecting both longer loading times and slower inference. The three models span a 54$\times$ range in checkpoint size (1.2--65\,GB), providing strong evidence for generalisability.
 
 \textbf{H4 verdict:} Confirmed. The shared-aware strategy provides 49--237$\times$ speedup across all tested batch sizes (100--10,000 tasks) with five models, and 5.3--6.8$\times$ speedup across model sizes (0.6B--32B), demonstrating robust and growing advantage at production scale.
 
-\section{Experiment 3: Johnson's Rule Ordering Ablation}
+\section{Experiment 4: Johnson's Rule Ordering Ablation}
 
 This experiment validates the effectiveness of Johnson's Rule for ordering model groups by comparing it against naive ordering strategies.
 
 \subsection{Motivation}
 
-Experiments 1--2 demonstrate that model grouping and prefetching dramatically reduce makespan, but they do not isolate the contribution of Johnson's Rule ordering. The four-strategy ablation in Experiment~1 demonstrates the aggregate benefit of Johnson's Rule (21\% improvement from Grouping+Prefetch to Shared-Aware), but does not isolate the effect of group ordering from the choice of model count. To validate Johnson's Rule specifically, we need a controlled experiment with 3+ models having diverse I/O-compute ratios, where all $3! = 6$ orderings can be exhaustively enumerated and compared against the flow-shop model predictions.
+Experiments~1--2 demonstrate that model grouping and prefetching dramatically reduce makespan, but do not isolate the contribution of Johnson's Rule ordering. The four-strategy ablation in Experiment~1 demonstrates the aggregate benefit of Johnson's Rule (21\% improvement from Grouping+Prefetch to Shared-Aware), but does not isolate the effect of group ordering from the choice of model count. To validate Johnson's Rule specifically, a controlled experiment is needed with 3+ models having diverse I/O-compute ratios, where all $3! = 6$ orderings can be exhaustively enumerated and compared against the flow-shop model predictions.
 
 \subsection{Methodology}
 
-We created a 90-task batch with three models of vastly different sizes:
+A 90-task batch was constructed with three models of substantially different sizes:
 \begin{itemize}
 \item \textbf{Qwen3-0.6B}: 30 tasks, fast load ($a_1 = 0.4$s), fast inference ($b_1 = 9.0$s, $\sim$0.3s/task)
 \item \textbf{Qwen3-8B}: 30 tasks, medium load ($a_2 = 5.1$s), medium inference ($b_2 = 15.0$s, $\sim$0.5s/task)
 \item \textbf{Qwen2.5-32B-Instruct}: 30 tasks, slow load ($a_3 = 21.7$s), slow inference ($b_3 = 36.0$s, $\sim$1.2s/task)
 \end{itemize}
 
-Load times are calculated as $\text{checkpoint\_size} / \text{SSD\_bandwidth}$ (e.g., 15.4\,GB / 3\,GB/s = 5.1\,s for the 8B model). Since there are only $3! = 6$ possible orderings, we exhaustively evaluate all of them:
+Load times are calculated as $\text{checkpoint\_size} / \text{SSD\_bandwidth}$ (e.g., 15.4\,GB / 3\,GB/s = 5.1\,s for the 8B model). Since there are only $3! = 6$ possible orderings, all are exhaustively evaluated:
 \begin{enumerate}
 \item \textbf{Johnson's Rule}: 0.6B → 8B → 32B (two-machine flow-shop optimal, Section~\ref{sec:johnsons_rule})
 \item \textbf{Alphabetical (model name)}: 32B → 0.6B → 8B (lexicographic sort by full model name\footnote{``Qwen2.5-32B'' $<$ ``Qwen3-0.6B'' $<$ ``Qwen3-8B'' lexicographically.})
@@ -1073,16 +1086,16 @@ Load times are calculated as $\text{checkpoint\_size} / \text{SSD\_bandwidth}$ (
 \item All remaining permutations
 \end{enumerate}
 
-All strategies use checkpoint prefetching with eager triggering (prefetch begins at the start of each group). We measured total makespan and per-group transition times.
+All strategies use checkpoint prefetching with eager triggering (prefetch begins at the start of each group). Total makespan and per-group transition times were measured.
 
 \subsection{Results}
 
-Table~\ref{tab:exp3_ordering_results} shows the makespan for all six possible orderings, computed using the two-machine flow-shop formula $C_{\max} = a_1 + \sum b_i + \sum \max(0, a_{i+1} - b_i)$.
+Table~\ref{tab:exp4_ordering_results} shows the makespan for all six possible orderings, computed using the two-machine flow-shop formula $C_{\max} = a_1 + \sum b_i + \sum \max(0, a_{i+1} - b_i)$.
 
 \begin{table}[htbp]
 \centering
-\caption{Experiment 3: Johnson's Rule ordering ablation (90 tasks, 3 models). All six permutations run experimentally; the Predicted column shows two-machine flow-shop model values confirming mean prediction error of 1.9\%.}
-\label{tab:exp3_ordering_results}
+\caption{Experiment 4: Johnson's Rule ordering ablation (90 tasks, 3 models). All six permutations were run experimentally; the Predicted column shows two-machine flow-shop model values confirming a mean prediction error of 1.9\%.}
+\label{tab:exp4_ordering_results}
 \small
 \begin{tabular}{rlrrrp{3.2cm}}
 \toprule
@@ -1099,13 +1112,13 @@ Table~\ref{tab:exp3_ordering_results} shows the makespan for all six possible or
 \normalsize
 \end{table}
 
-Figure~\ref{fig:exp3_ordering_bar} compares makespan across all six permutations. Figure~\ref{fig:exp3_ordering_gantt} visualises the execution timeline for Johnson's Rule vs Size-Descending ordering.
+Figure~\ref{fig:exp4_ordering_bar} compares makespan across all six permutations. Figure~\ref{fig:exp4_ordering_gantt} visualises the execution timeline for Johnson's Rule vs Size-Descending ordering.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.85\textwidth]{figure_exp3_ordering_bar.pdf}
-\caption{Johnson's Rule ordering ablation: measured makespan for all six permutations of three model groups (90 tasks). Diamonds show flow-shop model predictions (mean error 1.9\%). Johnson's Rule achieves the best measured makespan (68.3s); the default alphabetical ordering loses 21.8\%. Error bars show $\pm 1$ std over 3 runs.}
-\label{fig:exp3_ordering_bar}
+\caption{Johnson's Rule ordering ablation: measured makespan for all six permutations of three model groups (90 tasks). Diamonds show flow-shop model predictions (mean error 1.9\%). Johnson's Rule achieves the best measured makespan (68.3s); the default alphabetical ordering incurs a 21.8\% penalty. Error bars show $\pm 1$ std over 3 runs.}
+\label{fig:exp4_ordering_bar}
 \end{figure}
 
 \begin{figure}[htbp]
@@ -1201,18 +1214,18 @@ Figure~\ref{fig:exp3_ordering_bar} compares makespan across all six permutations
 
 \end{tikzpicture}
 \caption{Execution timeline comparison: Size-Descending vs Johnson's Rule ordering for a 3-model batch (0.6B, 8B, 32B). Size-Descending (top) places the I/O-heavy 32B model first, causing 21.7s of GPU-idle loading with no overlap opportunity. Johnson's Rule (bottom) places compute-heavy groups first (0.6B, 8B), providing long compute windows that hide most prefetch I/O, reducing makespan from 83.1s to 68.3s (18\% faster).}
-\label{fig:exp3_ordering_gantt}
+\label{fig:exp4_ordering_gantt}
 \end{figure}
 
 \subsection{Analysis}
 
-Johnson's Rule achieves the best measured makespan of 68.3 seconds, outperforming all five alternative orderings. The two-machine flow-shop model predicts these values with a mean error of 1.9\% (Table~\ref{tab:exp3_ordering_results}, Predicted column), confirming that the flow-shop abstraction accurately captures the prefetch-pipeline dynamics of checkpoint scheduling.
+Johnson's Rule achieves the best measured makespan of 68.3 seconds, outperforming all five alternative orderings. The two-machine flow-shop model predicts these values with a mean error of 1.9\% (Table~\ref{tab:exp4_ordering_results}, Predicted column), confirming that the flow-shop abstraction accurately captures the prefetch-pipeline dynamics of checkpoint scheduling.
 
 \textbf{Johnson's Rule classification.} Applying the $S_1$/$S_2$ partition from Section~\ref{sec:johnsons_rule}: 0.6B has $a_1=0.4$s, $b_1=9$s ($a \leq b$, enters $S_1$); 8B has $a_2=5.1$s, $b_2=15$s ($a \leq b$, enters $S_1$); 32B has $a_3=21.7$s, $b_3=36$s ($a \leq b$, enters $S_1$). All three groups are compute-heavy, so $S_1$ is sorted by $a_i$ ascending: 0.6B (0.4s) $\to$ 8B (5.1s) $\to$ 32B (21.7s). This ordering minimises the initial I/O cost and maximises the overlap window for each subsequent prefetch.
 
-\textbf{Why 32B-first orderings perform worst.} Both orderings that place 32B first (\#5 and \#6 in Table~\ref{tab:exp3_ordering_results}) incur 21.7 seconds of unmasked GPU-idle time at the start, since no preceding group exists to provide a prefetch overlap window. The subsequent groups (8B and 0.6B) have relatively short I/O times (5.1s and 0.4s) that are trivially hidden by the long 32B compute (36s), but the initial penalty is irrecoverable.
+\textbf{Why 32B-first orderings perform worst.} Both orderings that place 32B first (\#5 and \#6 in Table~\ref{tab:exp4_ordering_results}) incur 21.7 seconds of unmasked GPU-idle time at the start, since no preceding group exists to provide a prefetch overlap window. The subsequent groups (8B and 0.6B) have relatively short I/O times (5.1s and 0.4s) that are trivially hidden by the long 32B compute (36s), but the initial penalty is irrecoverable.
 
-\textbf{Default ordering is worst-case.} The default alphabetical ordering by model name (``Qwen2.5-32B'' $<$ ``Qwen3-0.6B'' $<$ ``Qwen3-8B'') places the I/O-heaviest model first, yielding the worst-case makespan (83.1s). Alphabetical sorting is the natural default for systems that group tasks by model name. Johnson's Rule provides a 21.8\% improvement over this default with no hyperparameter tuning.
+\textbf{Default ordering is worst-case.} The default alphabetical ordering by model name (``Qwen2.5-32B'' $<$ ``Qwen3-0.6B'' $<$ ``Qwen3-8B'') places the I/O-heaviest model first, yielding the worst-case makespan (83.1s). Alphabetical sorting is the natural default for systems that group tasks by model name; Johnson's Rule provides a 21.8\% improvement over this default with no hyperparameter tuning.
 
 \textbf{Robustness to inference time estimation.} Johnson's Rule optimality is theoretically conditioned on deterministic processing times. In practice, LLM output length varies, making $b_i$ estimates uncertain. For our workload, however, all model groups satisfy $a_i \ll b_i$: even the smallest group has $a_1/b_1 = 0.4/9 = 0.04$. Because all groups fall into $S_1$ of Johnson's partition, the optimal ordering reduces to \textit{ascending $a_i$} only --- a fully deterministic quantity equal to $\text{checkpoint\_size} / \text{bandwidth}$, which does not depend on inference time estimates at all. Inference time uncertainty therefore has zero effect on the JR ordering for compute-heavy LLM workloads. The edge case ($a_i > b_i$, meaning a model group has too few tasks to cover its own load time) is handled by a minimum group-size guard in the implementation; in such cases, the group is placed last to avoid penalising the remainder of the schedule.
 
@@ -1220,11 +1233,11 @@ Johnson's Rule achieves the best measured makespan of 68.3 seconds, outperformin
 
 \section{Experiment 5: Storage Tier Impact on Prefetching}
 
-This experiment evaluates how different storage tiers affect checkpoint prefetching performance, simulating production scenarios where models must be fetched from remote repositories rather than local SSD.
+This experiment evaluates how different storage tiers affect checkpoint prefetching performance, simulating production scenarios where models must be retrieved from remote repositories rather than local SSD.
 
 \subsection{Motivation}
 
-Production LLM deployments rarely have all models cached locally. Models may reside on remote object storage (S3, GCS) or network file systems (NFS), especially when the model catalogue exceeds local SSD capacity. Local SSDs, while fast, lack built-in replication; disk failure can render checkpoints unavailable until re-downloaded. Understanding the performance impact of different storage tiers on prefetching effectiveness is crucial for production capacity planning.
+Production LLM deployments rarely have all models cached locally. Models may reside on remote object storage (S3, GCS) or network file systems (NFS), particularly when the model catalogue exceeds local SSD capacity. Local SSDs, while fast, lack built-in replication; a disk failure can render checkpoints unavailable until they are re-downloaded. Understanding the performance impact of different storage tiers on prefetching effectiveness is therefore essential for production capacity planning.
 
 \subsection{Methodology}
 
@@ -1287,11 +1300,11 @@ Figure~\ref{fig:exp5_storage_tier} visualises the loading time breakdown and end
 
 \subsection{Analysis}
 
-\textbf{Prefetching is most valuable for mid-bandwidth storage.} For high-bandwidth tiers (RAID-0, 100\,GbE), loading time is already short ($\sim$2\,s), leaving minimal room for prefetching (3.7--4.0\% reduction). The largest absolute benefit is for 10\,GbE NFS (12.8s read time), where prefetching saves 10.1\,s (23.1\% reduction).
+\textbf{Prefetching is most valuable for mid-bandwidth storage.} For high-bandwidth tiers (RAID-0, 100\,GbE), loading time is already short ($\sim$2\,s), leaving minimal room for prefetching to reduce (3.7--4.0\% reduction). The largest absolute benefit arises for 10\,GbE NFS (12.8s read time), where prefetching saves 10.1\,s (23.1\% reduction).
 
-\textbf{PCIe DMA sets the I/O transfer lower bound.} Regardless of storage tier, the GPU memory transfer (0.9\,s via PCIe Gen4 x16) is irreducible, so the pure I/O component of a model transition cannot be shorter than $\sim$1\,s (Figure~\ref{fig:exp5_storage_tier}a). Note that this I/O lower bound is distinct from the practical transition lower bound: Experiment~2 measures a 32.6\,s residual after prefetching, which includes GPU memory allocation and vLLM engine initialisation ($\sim$32\,s) that cannot be overlapped with computation regardless of storage tier. Experiment~5 isolates the I/O component only; the vLLM initialisation overhead is constant across all storage tiers.
+\textbf{PCIe DMA sets the I/O transfer lower bound.} Regardless of storage tier, the GPU memory transfer (0.9\,s via PCIe Gen4 x16) is irreducible, so the pure I/O component of a model transition cannot be shorter than $\sim$1\,s (Figure~\ref{fig:exp5_storage_tier}a). This I/O lower bound is distinct from the practical transition lower bound: Experiment~2 measures a 32.6\,s residual after prefetching, which includes GPU memory allocation and vLLM engine initialisation ($\sim$32\,s) that cannot be overlapped with computation regardless of storage tier. Experiment~5 isolates the I/O component only; the vLLM initialisation overhead is constant across all storage tiers.
 
-\textbf{Network storage and fault tolerance.} While 10\,GbE NFS adds 7.7s of read latency compared to single NVMe, it provides critical fault tolerance through built-in replication. Prefetching compensates for most of this additional latency (78.9\% hidden), reducing the practical penalty to 2.7s of residual wait --- an acceptable trade-off for the unlimited capacity and replication benefits of remote storage.
+\textbf{Network storage and fault tolerance.} While 10\,GbE NFS adds 7.7s of read latency relative to single NVMe, it provides critical fault tolerance through built-in replication. Prefetching compensates for most of this additional latency (78.9\% hidden), reducing the practical penalty to 2.7s of residual wait---an acceptable trade-off for the unlimited capacity and replication benefits of remote storage.
 
 
 \section{Evaluation Summary}
@@ -1311,25 +1324,25 @@ The experimental evaluation demonstrates three levels of compounding optimisatio
 
 \chapter{Discussion}
 
-This chapter interprets the experimental findings, answering the research questions posed in Chapter~1, and discusses limitations.
+This chapter interprets the experimental findings, answers the research questions posed in Chapter~1, and discusses limitations.
 
 \section{Answering the Research Questions}
 
 \paragraph{RQ1: How to Discover and Exploit Shared Structure?}
 
-Model grouping effectively discovers and exploits the dominant shared structure in batch workloads: shared model weights. Grouping reduces switches from $O(n)$ to $O(k)$, yielding a 99\% makespan reduction (Experiment~1). The shared-aware strategy outperforms all baselines across batch sizes 100--10,000 and model sizes 0.6B--32B (Experiment~4), with advantages growing as batch size increases because larger batches amortise the fixed model loading cost over more tasks.
+Model grouping effectively discovers and exploits the dominant shared structure in batch workloads: shared model weights. Grouping reduces switches from $O(n)$ to $O(k)$, yielding a 99\% makespan reduction (Experiment~1). The shared-aware strategy outperforms all baselines across batch sizes 100--10,000 and model sizes 0.6B--32B (Experiment~3), with advantages growing as batch size increases because larger batches amortise the fixed model loading cost over more tasks.
 
 \paragraph{RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}
 
-Yes. The batch scheduling problem maps naturally to a two-machine flow-shop where Machine~A is I/O (loading model weights) and Machine~B is GPU computation. Johnson's Rule determines the optimal model group ordering to maximise overlap between loading and execution. Checkpoint prefetching implements this overlap, hiding 68.7\% of model loading latency (Experiment~2). Experiment~3 validates that Johnson's Rule outperforms naive orderings by 7.2--22.0\%, with the largest gains occurring when the default alphabetical ordering happens to place I/O-heavy models first. The combination of Johnson's Rule ordering with prefetching is more effective than naive ordering because compute-heavy groups are scheduled first, providing a longer overlap window for prefetching the next model.
+Yes. The batch scheduling problem maps naturally to a two-machine flow-shop where Machine~A is I/O (loading model weights) and Machine~B is GPU computation. Johnson's Rule determines the optimal model group ordering to maximise overlap between loading and execution. Checkpoint prefetching implements this overlap, hiding 68.7\% of model loading latency (Experiment~2). Experiment~4 validates that Johnson's Rule outperforms naive orderings by 7.2--22.0\%, with the largest gains occurring when the default alphabetical ordering happens to place I/O-heavy models first. The combination of Johnson's Rule ordering with prefetching is more effective than naive ordering because compute-heavy groups are scheduled first, providing a longer overlap window for prefetching the next model.
 
 \paragraph{RQ3: How Do Strategies Compare?}
 
-FIFO is unsuitable for multi-model batches due to excessive switching (96\% of time spent on loading). Model Grouping provides deterministic first-order improvement by eliminating redundant switches. Shared-Aware (grouping + Johnson's Rule + prefetching) provides additional benefit through I/O-computation overlap. The relative advantage is consistent across model sizes 0.6B--32B (Experiment~4), indicating robustness. Johnson's Rule provides measurable benefit (7.2--22.0\%) when the batch contains models with diverse I/O-compute characteristics (Experiment~3). Model grouping with Johnson's Rule ordering should be the default for any multi-model batch workload.
+FIFO is unsuitable for multi-model batches due to excessive switching (96\% of time spent on loading). Model Grouping provides deterministic first-order improvement by eliminating redundant switches. Shared-Aware (grouping + Johnson's Rule + prefetching) provides additional benefit through I/O-computation overlap. The relative advantage is consistent across model sizes 0.6B--32B (Experiment~3), indicating robustness. Johnson's Rule provides measurable benefit (7.2--22.0\%) when the batch contains models with diverse I/O-compute characteristics (Experiment~4). Model grouping with Johnson's Rule ordering should be the default for any multi-model batch workload.
 
 \section{What Was Built vs What Was Reused}
 
-It is important to clarify the division of labour between existing infrastructure and new contributions.
+The division of labour between existing infrastructure and new contributions is clarified below.
 
 \textbf{Reused.} The ServerlessLLM framework ($\sim$15K LoC Python + C++) provides the API gateway, router, SQLite database, sllm-store checkpoint manager (C++ with gRPC interface), Pylet worker process, autoscaler, and reconciler. The vLLM inference engine handles all GPU-level computation (attention kernels, KV cache management, continuous batching). Model checkpoints were downloaded from HuggingFace.
 
@@ -1345,26 +1358,26 @@ Several design decisions warrant explicit justification.
 
 \textbf{Semaphore concurrency vs synchronous execution.} Experiment~1 shows that any model-aware strategy dramatically outperforms synchronous FIFO (575s vs 78,900s for 500 tasks), justifying the semaphore approach despite its added complexity. The semaphore buffer size (default 10) controls the trade-off between GPU utilisation (higher buffer) and memory pressure (lower buffer).
 
-\textbf{Composable optimisations.} Model grouping (Phase~1) and Johnson's Rule ordering (Phase~2) are independent and composable --- grouping provides the dominant benefit, Johnson's Rule adds an additional 7--22\% on top. This separation allows deploying grouping alone when Johnson's Rule's I/O-time estimates are unreliable (e.g., variable network bandwidth).
+\textbf{Composable optimisations.} Model grouping (Phase~1) and Johnson's Rule ordering (Phase~2) are independent and composable---grouping provides the dominant benefit, Johnson's Rule adds an additional 7--22\% on top. This separation allows deploying grouping alone when the I/O-time estimates required by Johnson's Rule are unreliable (e.g., under variable network bandwidth).
 
 \textbf{Cluster-level vs engine-level scheduling.} Operating above the inference engine ensures portability across vLLM, SGLang, and TensorRT-LLM without engine modifications. The cost is that engine-level optimisations (e.g., prefix caching across model groups) cannot be directly exploited by the scheduler.
 
 \section{Algorithm Limitations}
 
-Four limitations warrant discussion. First, the single-model-per-worker assumption is suboptimal for LoRA adapters, which can share base models with sub-second swaps. Second, Johnson's Rule assumes deterministic processing times, but LLM inference times vary with output length; we use conservative estimates based on model size. Third, the memory-aware prefetch guard is conservative --- it skips prefetching when CPU pinned memory is tight rather than evicting cached models. Fourth, the algorithm processes one batch at a time without multi-tenant fairness guarantees.
+Four limitations warrant discussion. First, the single-model-per-worker assumption is suboptimal for LoRA adapters, which can share base models with sub-second swaps. Second, Johnson's Rule assumes deterministic processing times, but LLM inference times vary with output length; conservative estimates based on model size are used instead. Third, the memory-aware prefetch guard is conservative---it skips prefetching when CPU pinned memory is tight rather than evicting cached models. Fourth, the algorithm processes one batch at a time without multi-tenant fairness guarantees.
 
 \textbf{Johnson's Rule boundary conditions.} Johnson's Rule delivers maximum benefit when models have strongly contrasting I/O-compute ratios. When all models have similar ratios (e.g., all small models or all large models), any permutation yields nearly identical makespan and Johnson's Rule provides no benefit over alphabetical ordering. In the degenerate case where $a_i = b_i$ for all groups, the rule reduces to arbitrary ordering. This boundary condition is important for practitioners: the scheduler correctly handles it (Johnson's Rule still runs, it just happens to match FIFO), but users should not expect significant gains from a homogeneous model catalogue.
 
 \textbf{Theoretical makespan lower bound.} A fundamental lower bound on makespan for our two-machine flow-shop is:
 $$C_{\max}^* \geq \max\left(\sum_{i=1}^k b_i,\; \min_i a_i + \sum_{i=1}^k b_i,\; \sum_{i=1}^k a_i + \min_i b_i\right)$$
-For our Exp~3 workload ($\sum b_i = 9+15+36 = 60$s, $\min a_i = 0.4$s), the lower bound is $\max(60, 60.4) = 60.4$s. Johnson's Rule achieves 67.1s, within 11.1\% of this theoretical optimum. The gap arises because the 32B model's 21.7s load cannot be fully overlapped with the 8B group's 15s compute, leaving a 6.7s residual. This illustrates that while Johnson's Rule is optimal among all orderings, the absolute makespan depends on the I/O:compute balance of the workload.
+For our Exp~4 workload ($\sum b_i = 9+15+36 = 60$s, $\min a_i = 0.4$s), the lower bound is $\max(60, 60.4) = 60.4$s. Johnson's Rule achieves 67.1s, within 11.1\% of this theoretical optimum. The gap arises because the 32B model's 21.7s load cannot be fully overlapped with the 8B group's 15s compute, leaving a 6.7s residual. This illustrates that while Johnson's Rule is optimal among all orderings, the absolute makespan depends on the I/O:compute balance of the workload.
 
 \section{Threats to Validity}
 
 \paragraph{Internal Validity}
-Experiments were conducted on a shared GPU cluster; other users' GPU processes and I/O could affect timing measurements. Experiments 1 (strategy comparison), 3 (concurrency mode), and 4 (scalability) report measurements from a live ServerlessLLM cluster with cold-start verification between runs. Each data point is the mean of 3 independent runs; we report $\pm 1$ standard deviation.
+Experiments were conducted on a shared GPU cluster; other users' GPU processes and I/O could affect timing measurements. Experiments 1 (strategy comparison), 3 (scalability), and 4 (ordering ablation) report measurements from a live ServerlessLLM cluster with cold-start verification between runs. Each data point is the mean of 3 independent runs; we report $\pm 1$ standard deviation.
 
-The prefetch and Johnson's Rule experiments (Experiments 2--3) require models with diverse checkpoint sizes (0.6B, 8B, 32B) to produce meaningful transition cost variation. With only small, similarly-sized models on fast NVMe SSD, both prefetch overlap and group ordering have limited effect because the I/O cost per transition is small relative to compute time. The benefit of these optimisations scales with the number and size diversity of models in the batch. Experiment~4 demonstrates this scaling up to 10,000 tasks; production workloads with 8+ models spanning a wider parameter range (1B--70B) would approach the 247$\times$ asymptotic limit more quickly due to larger per-switch overheads.
+The prefetch and Johnson's Rule experiments (Experiments 2 and~4) require models with diverse checkpoint sizes (0.6B, 8B, 32B) to produce meaningful transition cost variation. With only small, similarly-sized models on fast NVMe SSD, both prefetch overlap and group ordering have limited effect because the I/O cost per transition is small relative to compute time. The benefit of these optimisations scales with the number and size diversity of models in the batch. Experiment~3 demonstrates this scaling up to 10,000 tasks; production workloads with 8+ models spanning a wider parameter range (1B--70B) would approach the 247$\times$ asymptotic limit more quickly due to larger per-switch overheads.
 
 \paragraph{External Validity}
 We evaluated five Qwen models (0.6B--32B) on a single hardware configuration (RTX A5000, NVMe SSD). Results may not generalise to mixture-of-experts architectures, different storage technologies (e.g., Lustre, CephFS), or larger clusters. The model switching overhead is hardware-specific; faster storage would reduce the absolute benefit of model grouping, though the relative advantage remains consistent.
@@ -1386,11 +1399,11 @@ This chapter outlines three directions for extending the shared-aware scheduling
 
 \section{Inference-Level Extensions: Prefix-Aware Ordering and Multi-LoRA}
 
-The current system groups tasks by model but does not exploit prompt prefix sharing. Extending the scheduler to sort tasks within each model group by prefix hash would maximise inference engine cache reuse (e.g., SGLang's RadixAttention), with the key challenge being efficient prefix detection without full prompt comparison. Additionally, the system currently treats each LoRA adapter as a separate model; since multiple adapters can share a base model with sub-second swaps ($<$1s vs 80--120s full reload), grouping by base model and exploiting vLLM's multi-LoRA serving \citep{sheng2024slora} would provide significant speedup for adapter-heavy workloads.
+The current system groups tasks by model but does not exploit prompt prefix sharing. Extending the scheduler to sort tasks within each model group by prefix hash would maximise inference engine cache reuse (e.g., RadixAttention in SGLang), with the key challenge being efficient prefix detection without full prompt comparison. Additionally, the system currently treats each LoRA adapter as a separate model; since multiple adapters can share a base model with sub-second swaps ($<$1s vs 80--120s full reload), grouping by base model and exploiting multi-LoRA serving in vLLM \citep{sheng2024slora} would provide significant speedup for adapter-heavy workloads.
 
 \section{Storage Extensions: Adaptive and Network-Aware Prefetching}
 
-The current prefetching mechanism triggers at a fixed point (start of each group). An adaptive policy would observe task completion times in real-time and adjust the trigger point dynamically, maximising I/O-computation overlap for heterogeneous task groups. For network storage, integrating with cloud object storage APIs (S3, GCS, Azure Blob) and using bandwidth-aware scheduling that dynamically adjusts prefetch timing based on observed network throughput would enable direct streaming from replicated storage without local caching. Experiment~5 demonstrates that the architecture already supports network storage effectively; the remaining work is engineering rather than algorithmic.
+The current prefetching mechanism triggers at a fixed point (the start of each group). An adaptive policy would observe task completion times in real time and adjust the trigger point dynamically, maximising I/O-computation overlap for heterogeneous task groups. For network storage, integrating with cloud object storage APIs (S3, GCS, Azure Blob) and using bandwidth-aware scheduling that dynamically adjusts prefetch timing based on observed network throughput would enable direct streaming from replicated storage without local caching. Experiment~5 demonstrates that the architecture already supports network storage effectively; the remaining work is engineering rather than algorithmic.
 
 \section{Production Readiness: Scalability and Engine Abstraction}
 
@@ -1403,17 +1416,17 @@ Three engineering improvements would enable production-scale deployment: output 
 
 \chapter{Conclusion}
 
-This dissertation addressed makespan minimisation for LLM batch inference by discovering and exploiting shared structure in batch tasks. We formalised the problem as a two-machine flow-shop and proposed a shared-aware scheduling algorithm that applies Johnson's Rule at the cluster scheduler level without modifying the inference engine.
+This dissertation addressed makespan minimisation for LLM batch inference by discovering and exploiting shared structure in batch tasks. The problem was formalised as a two-machine flow-shop, and a shared-aware scheduling algorithm was proposed that applies Johnson's Rule at the cluster scheduler level without modifying the inference engine.
 
 \section{Contributions}
 
-The work makes five contributions: (1) a two-machine flow-shop formulation mapping model loading (I/O) and GPU inference (compute) to Johnson's classical framework; (2) a shared-aware scheduling algorithm that groups tasks by model and applies Johnson's Rule for optimal group ordering; (3) a checkpoint prefetching mechanism that preloads model weights via sllm-store's pinned memory pool during computation; (4) design analysis and evaluation of prefetching across storage tiers (SSD, RAID, NFS); and (5) an OpenAI-compatible batch API extended for multi-model batches.
+Five contributions are made: (1) a two-machine flow-shop formulation mapping model loading (I/O) and GPU inference (compute) to Johnson's classical framework; (2) a shared-aware scheduling algorithm that groups tasks by model and applies Johnson's Rule for optimal group ordering; (3) a checkpoint prefetching mechanism that preloads model weights via the pinned memory pool of sllm-store during computation; (4) design analysis and evaluation of prefetching across storage tiers (SSD, RAID, NFS); and (5) an OpenAI-compatible batch API extended for multi-model batches.
 
 \section{Key Findings}
 
 Model switching is the dominant bottleneck for multi-model batches, with an average per-switch overhead of $\sim$157\,s across a five-model workload. Model grouping reduces makespan by 99\% (78,900s $\to$ 1,107s for a 500-task batch), eliminating $O(n)$ switches. Checkpoint prefetching provides an additional 1.6$\times$ improvement; Johnson's Rule ordering adds a further 1.2$\times$, for a combined 137$\times$ speedup over FIFO. The shared-aware strategy outperforms FIFO by 49--237$\times$ across batch sizes of 100--10,000 tasks, with advantages growing as $n$ increases towards the asymptotic limit of $247\times$. Across model sizes (0.6B--32B), consistent 5.3--6.8$\times$ speedup confirms robustness. Checkpoint prefetching hides 68.7\% of total cold-switch latency on local SSD (Experiment~2, measuring full transition time including vLLM initialisation) and 78.9\% of the I/O read time on 10\,GbE network storage (Experiment~5, isolating the I/O component). Johnson's Rule provides an additional 7.2--22.0\% makespan reduction over naive orderings and is robust to inference time estimation uncertainty.
 
-The central insight is that batch tasks are not independent: they contain exploitable shared structure that the scheduler should discover and leverage. The algorithm is general and portable --- it operates above the inference engine, making it applicable to vLLM, SGLang, TensorRT-LLM, and other backends without modification. The OpenAI-compatible batch API enables migration from cloud services to self-hosted infrastructure without client code changes. By demonstrating that simple scheduler-level optimisations can dramatically reduce makespan even with network-attached storage, this work provides a foundation for batch-optimised LLM serving systems.
+The central insight is that batch tasks are not independent: they contain exploitable shared structure that the scheduler should discover and leverage. The algorithm is general and portable---it operates above the inference engine, making it applicable to vLLM, SGLang, TensorRT-LLM, and other backends without modification. The OpenAI-compatible batch API enables migration from cloud services to self-hosted infrastructure without client code changes. By demonstrating that simple scheduler-level optimisations can dramatically reduce makespan even with network-attached storage, this work provides a foundation for batch-optimised LLM serving systems.
 
 
 
