@@ -14,7 +14,7 @@ Purpose: Understand how model size affects inference throughput,
 which informs the cost model for autoscaling decisions.
 """
 
-import sys, time, json
+import sys, json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -22,6 +22,7 @@ from exp_common import (
     set_strategy, submit_batch, extract_task_metrics,
     save_result, make_task,
     MODEL_SMALL, MODEL_MEDIUM, MODEL_LARGE, RESULTS_ROOT,
+    clear_deployments,
 )
 
 OUTDIR = RESULTS_ROOT / "exp6_model_size"
@@ -76,7 +77,7 @@ def run():
         print(f"  Throughput: {throughput:.2f} req/s")
         print(f"  Avg latency: {metrics['avg_latency']:.2f}s")
 
-        time.sleep(10)
+        clear_deployments(timeout=120.0)
 
     # ── summary ────────────────────────────────────────────────────────────
     save_result(results, OUTDIR / "summary.json")

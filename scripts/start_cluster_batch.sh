@@ -52,10 +52,16 @@ $PYLET_BIN start > pylet_head_batch.log 2>&1 &
 echo "Pylet Head PID: $!"
 sleep 2
 
-echo "=== 2. Starting Pylet Worker (2 GPUs) ==="
+# Auto-detect GPU count from CUDA_VISIBLE_DEVICES
+if [ -n "$CUDA_VISIBLE_DEVICES" ]; then
+    GPU_COUNT=$(echo "$CUDA_VISIBLE_DEVICES" | tr ',' '\n' | wc -l)
+else
+    GPU_COUNT=$($PYTHON -c "import torch; print(torch.cuda.device_count())" 2>/dev/null || echo 1)
+fi
+echo "=== 2. Starting Pylet Worker ($GPU_COUNT GPUs) ==="
 # Connects to localhost:8000
 # We explicitly pass the env var again to be absolutely sure
-CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES $PYLET_BIN start --head localhost:8000 --gpu-units 2 > pylet_worker_batch.log 2>&1 &
+CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES $PYLET_BIN start --head localhost:8000 --gpu-units $GPU_COUNT > pylet_worker_batch.log 2>&1 &
 echo "Pylet Worker PID: $!"
 sleep 2
 
@@ -82,23 +88,23 @@ echo "Press Ctrl+C to stop the cluster."
 
 # === Example Usage (Run in another terminal) ===
 echo ""
-echo "=== To Submit a 10-Task Batch Job (Qwen 1.5B & 7B) ==="
+echo "=== To Submit a 10-Task Batch Job (Qwen 0.6B & 7B) ==="
 echo "Run the following command in another terminal:"
 echo ""
 echo "curl -X POST http://localhost:8343/v1/batches \\"
 echo "  -H \"Content-Type: application/json\" \\"
 echo "  -d '{"
 echo "    \"tasks\": ["
-echo "      {\"custom_id\": \"task-1-llama\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"meta-llama/Meta-Llama-3-8B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"1+1=?\"}]}},"
-echo "      {\"custom_id\": \"task-2-llama\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"meta-llama/Meta-Llama-3-8B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Name a color.\", \"max_tokens\": 10}]}},"
-echo "      {\"custom_id\": \"task-3-llama\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"meta-llama/Meta-Llama-3-8B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"What is the capital of Italy?\"}]}},"
-echo "      {\"custom_id\": \"task-4-llama\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"meta-llama/Meta-Llama-3-8B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Write a haiku about code.\"}]}},"
-echo "      {\"custom_id\": \"task-5-llama\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"meta-llama/Meta-Llama-3-8B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Is Python a snake?\"}]}},"
-echo "      {\"custom_id\": \"task-6-qwen\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Explain quantum entanglement simply.\"}]}},"
-echo "      {\"custom_id\": \"task-7-qwen\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"List 3 benefits of exercise.\"}]}},"
-echo "      {\"custom_id\": \"task-8-qwen\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Who wrote Hamlet?\"}]}},"
-echo "      {\"custom_id\": \"task-9-qwen\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Translate Hello to Spanish.\"}]}},"
-echo "      {\"custom_id\": \"task-10-qwen\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"What is the speed of light?\"}]}}"
+echo "      {\"custom_id\": \"task-1-small\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen3-0.6B\", \"messages\": [{\"role\": \"user\", \"content\": \"1+1=?\"}], \"max_tokens\": 20}},"
+echo "      {\"custom_id\": \"task-2-small\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen3-0.6B\", \"messages\": [{\"role\": \"user\", \"content\": \"Name a color.\"}], \"max_tokens\": 20}},"
+echo "      {\"custom_id\": \"task-3-small\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen3-0.6B\", \"messages\": [{\"role\": \"user\", \"content\": \"What is the capital of Italy?\"}], \"max_tokens\": 20}},"
+echo "      {\"custom_id\": \"task-4-small\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen3-0.6B\", \"messages\": [{\"role\": \"user\", \"content\": \"Write a haiku about code.\"}], \"max_tokens\": 20}},"
+echo "      {\"custom_id\": \"task-5-small\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen3-0.6B\", \"messages\": [{\"role\": \"user\", \"content\": \"Is Python a snake?\"}], \"max_tokens\": 20}},"
+echo "      {\"custom_id\": \"task-6-big\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Explain quantum entanglement simply.\"}], \"max_tokens\": 50}},"
+echo "      {\"custom_id\": \"task-7-big\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"List 3 benefits of exercise.\"}], \"max_tokens\": 50}},"
+echo "      {\"custom_id\": \"task-8-big\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Who wrote Hamlet?\"}], \"max_tokens\": 50}},"
+echo "      {\"custom_id\": \"task-9-big\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"Translate Hello to Spanish.\"}], \"max_tokens\": 50}},"
+echo "      {\"custom_id\": \"task-10-big\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"Qwen/Qwen2.5-7B-Instruct\", \"messages\": [{\"role\": \"user\", \"content\": \"What is the speed of light?\"}], \"max_tokens\": 50}}"
 echo "    ]"
 echo "  }'"
 echo ""

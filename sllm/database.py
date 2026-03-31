@@ -531,6 +531,22 @@ class Database:
         ).fetchall()
         return [self._row_to_deployment(row) for row in rows]
 
+    def update_max_replicas(self, deployment_id: str, max_replicas: int) -> bool:
+        """Update max_replicas for a deployment. Returns True if updated."""
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+
+        cursor = conn.execute(
+            """
+            UPDATE deployments
+            SET max_replicas = ?, updated_at = ?
+            WHERE id = ? AND status = 'active'
+            """,
+            (max_replicas, now, deployment_id),
+        )
+
+        return cursor.rowcount > 0
+
     def update_desired_replicas(self, deployment_id: str, desired: int) -> bool:
         """Update desired_replicas for a deployment. Returns True if updated."""
         conn = self._get_connection()

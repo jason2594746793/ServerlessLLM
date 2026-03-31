@@ -517,6 +517,56 @@ class StorageManager:
             )
             return False
 
+    async def unload_from_cpu(self, model_name: str) -> bool:
+        """Unload model from sllm-store's pinned CPU memory.
+
+        Used by the batch scheduler to proactively free pool space after a
+        model group finishes and no future tasks need the model.
+        """
+        loop = asyncio.get_running_loop()
+        try:
+            endpoint = None
+            for ep in self._store_endpoints.values():
+                endpoint = ep
+                break
+
+            if not endpoint:
+                logger.warning(
+                    f"[UNLOAD] No sllm-store endpoint available, "
+                    f"cannot unload {model_name}"
+                )
+                return False
+
+            result = await loop.run_in_executor(
+                None,
+                self._unload_via_store,
+                model_name,
+                endpoint,
+            )
+            return result
+        except Exception as e:
+            logger.error(f"[UNLOAD] Error unloading {model_name}: {e}")
+            return False
+
+    @staticmethod
+    def _unload_via_store(model_name: str, endpoint: str) -> bool:
+        """Unload model from pinned CPU memory via sllm-store gRPC."""
+        try:
+            from sllm_store.client import SllmStoreClient
+
+            client = SllmStoreClient(server_address=endpoint)
+            response = client.unload_from_cpu(model_name)
+
+            if response is False:
+                logger.error(f"[UNLOAD] sllm-store failed to unload {model_name}")
+                return False
+
+            logger.info(f"[UNLOAD] {model_name} removed from pinned memory")
+            return True
+        except Exception as e:
+            logger.error(f"[UNLOAD] sllm-store unload failed for {model_name}: {e}")
+            return False
+
     def _prefetch_raw_read(self, model_name: str) -> bool:
         """Fallback: read weight files into OS page cache via raw I/O."""
         import os

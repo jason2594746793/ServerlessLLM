@@ -568,6 +568,19 @@
             height: auto;
         }
 
+        .figure-container {
+            display: flex;
+            justify-content: center;
+            margin: clamp(0.3rem, 1vh, 0.8rem) 0;
+        }
+
+        .figure-container img {
+            max-width: min(90vw, 900px);
+            max-height: 55vh;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
         /* === RESPONSIVE BREAKPOINTS === */
         @media (max-height:700px) {
             :root {
@@ -640,11 +653,10 @@
     <section class="slide title-slide" id="slide-1">
         <div class="slide-content">
             <h1 class="reveal">Efficient Scheduling for Batched AI Jobs</h1>
-            <p class="subtitle reveal">Minimising model-switch overhead in serverless LLM inference through grouping, prefetching, and admission control</p>
+            <p class="subtitle reveal">Minimising Makespan through Model Grouping, Johnson's Rule, and Checkpoint Prefetching</p>
             <div class="rule reveal"></div>
             <div class="meta reveal">
-                <span>Jingsheng Wang</span>
-                <span>MSc Dissertation &middot; 2025</span>
+                <span>Jingsheng Chen</span>
             </div>
         </div>
         <div class="slide-number">1</div>
@@ -658,12 +670,12 @@
             <h2 class="reveal">Why Batch LLM Inference?</h2>
             <ul>
                 <li class="reveal">Enterprises run <span class="em">thousands of offline tasks</span> daily: summarisation, classification, extraction</li>
-                <li class="reveal">Researchers submit <span class="em2">large-scale benchmarks</span> across multiple models &mdash; evaluation suites, leaderboard runs, ablation studies</li>
-                <li class="reveal">Real-time latency is not required &mdash; <span class="em">throughput and cost</span> matter most</li>
-                <li class="reveal">Serverless platforms scale GPUs to zero between jobs, but <span class="em-red">model loading is expensive</span> &mdash; a single switch costs <span class="em-warm">~90 seconds</span></li>
+                <li class="reveal">Researchers submit <span class="em2">large-scale benchmarks</span> across multiple models for evaluation suites, leaderboard runs, and ablation studies</li>
+                <li class="reveal">Real-time latency is not required; <span class="em">throughput and cost</span> matter most</li>
+                <li class="reveal"><span class="em-red">model loading is expensive</span>: switching a 7–8B model costs <span class="em-warm">~5–15s</span> on NVMe SSD; at O(N) switches this dominates makespan</li>
             </ul>
             <div class="insight reveal">
-                <p>Core Research Question: In offline batch LLM inference &mdash; where all tasks are submitted before execution begins &mdash; how can the scheduler discover shared structure among tasks (model weights, prompt prefixes) and use it to minimise the total completion time (makespan)?</p>
+                <p>Core question: given a batch of offline LLM tasks submitted before execution begins, how can the scheduler exploit shared structure to minimise total completion time (makespan)?</p>
             </div>
         </div>
         <div class="slide-number">2</div>
@@ -679,7 +691,7 @@
             <div class="formula-block reveal">
                 <code>T<sub>total</sub> = &Sigma; T<sub>compute</sub>(i) + S &times; T<sub>switch</sub></code>
             </div>
-            <p class="reveal">where <code>S</code> = number of model switches, <code>T<sub>switch</sub></code> &asymp; 90s per switch.</p>
+            <p class="reveal">where <code>S</code> = number of model switches, <code>T<sub>switch</sub></code> = 15s to 580s depending on model size.</p>
             <div class="diagram-container reveal">
                 <div class="diagram-box">
                     <div class="label">FIFO</div>
@@ -696,9 +708,6 @@
                     <div class="value" style="color: var(--accent-green);">overlap I/O</div>
                 </div>
             </div>
-            <div class="insight reveal">
-                <p>With 500 tasks and ~180 switches, FIFO wastes ~16,200s on loading alone. Grouping cuts this to 2 switches (180s). Prefetching hides even that.</p>
-            </div>
         </div>
         <div class="slide-number">3</div>
     </section>
@@ -710,46 +719,45 @@
         <div class="slide-content">
             <h2 class="reveal">FIFO vs Grouped vs Prefetch</h2>
             <div class="reveal" style="margin-top: clamp(0.3rem, 1vh, 0.6rem);">
-                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em-red">Naive FIFO</span> &mdash; tasks in arrival order, constant model thrashing:</p>
+                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em-red">Naive FIFO</span>, tasks in arrival order, constant model thrashing:</p>
                 <div class="tl-bar" style="margin-bottom: clamp(0.5rem, 1vh, 0.7rem);">
-                    <div class="tl-seg tl-compute" style="width:5%">A</div>
-                    <div class="tl-seg tl-load" style="width:14%">load B</div>
-                    <div class="tl-seg tl-compute" style="width:4%">B</div>
-                    <div class="tl-seg tl-load" style="width:14%">load A</div>
-                    <div class="tl-seg tl-compute" style="width:3%">A</div>
-                    <div class="tl-seg tl-load" style="width:14%">load C</div>
-                    <div class="tl-seg tl-compute" style="width:4%; background: var(--accent-warm);">C</div>
-                    <div class="tl-seg tl-load" style="width:14%">load B</div>
+                    <div class="tl-seg tl-compute" style="width:4%">A</div>
+                    <div class="tl-seg tl-load" style="width:12%">load B</div>
                     <div class="tl-seg tl-compute" style="width:3%">B</div>
-                    <div class="tl-seg tl-idle" style="width:25%">&hellip; 180 switches</div>
+                    <div class="tl-seg tl-load" style="width:12%">load C</div>
+                    <div class="tl-seg tl-compute" style="width:3%; background: var(--accent-warm);">C</div>
+                    <div class="tl-seg tl-load" style="width:14%">load D</div>
+                    <div class="tl-seg tl-compute" style="width:2%; background: var(--accent-green);">D</div>
+                    <div class="tl-seg tl-load" style="width:12%">load A</div>
+                    <div class="tl-seg tl-compute" style="width:3%">A</div>
+                    <div class="tl-seg tl-idle" style="width:35%">&hellip; hundreds of switches</div>
                 </div>
             </div>
             <div class="reveal">
-                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em-green">Model-Grouped</span> &mdash; sorted by model, only K&minus;1 = 2 switches:</p>
+                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em-green">Model-Grouped</span>, sorted by model, only K&minus;1 = 3 switches:</p>
                 <div class="tl-bar" style="margin-bottom: clamp(0.5rem, 1vh, 0.7rem);">
-                    <div class="tl-seg tl-compute" style="width:30%">A &middot; A &middot; A &hellip;</div>
-                    <div class="tl-seg tl-load" style="width:12%">load B (90s)</div>
-                    <div class="tl-seg tl-compute" style="width:22%; background: var(--accent2);">B &middot; B &hellip;</div>
-                    <div class="tl-seg tl-load" style="width:12%">load C (90s)</div>
-                    <div class="tl-seg tl-compute" style="width:14%; background: var(--accent-warm);">C &hellip;</div>
+                    <div class="tl-seg tl-compute" style="width:22%">A &middot; A &middot; A &hellip;</div>
+                    <div class="tl-seg tl-load" style="width:10%">load B</div>
+                    <div class="tl-seg tl-compute" style="width:18%; background: var(--accent2);">B &middot; B &hellip;</div>
+                    <div class="tl-seg tl-load" style="width:10%">load C</div>
+                    <div class="tl-seg tl-compute" style="width:12%; background: var(--accent-warm);">C &hellip;</div>
+                    <div class="tl-seg tl-load" style="width:10%">load D</div>
+                    <div class="tl-seg tl-compute" style="width:8%; background: var(--accent-green);">D</div>
                     <div class="tl-seg tl-idle" style="width:10%">saved</div>
                 </div>
             </div>
             <div class="reveal">
-                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em">Grouped + Aggressive Prefetch</span> &mdash; SSD&rarr;CPU starts immediately when group begins; only DMA (~5s) remains at switch:</p>
+                <p style="margin-bottom: clamp(0.2rem, 0.5vh, 0.3rem);"><span class="em">Grouped + Aggressive Prefetch</span>: SSD-to-CPU transfer starts immediately when a group begins; only PCIe DMA (~0.5s to 7s) remains at switch:</p>
                 <div class="tl-bar">
-                    <div class="tl-seg tl-compute" style="width:32%">A &middot; A &middot; A &hellip;</div>
+                    <div class="tl-seg tl-compute" style="width:24%">A &middot; A &middot; A &hellip;</div>
+                    <div class="tl-seg tl-prefetch" style="width:1%"></div>
+                    <div class="tl-seg tl-compute" style="width:20%; background: var(--accent2);">B &middot; B &hellip;</div>
+                    <div class="tl-seg tl-prefetch" style="width:1%"></div>
+                    <div class="tl-seg tl-compute" style="width:14%; background: var(--accent-warm);">C &hellip;</div>
                     <div class="tl-seg tl-prefetch" style="width:2%"></div>
-                    <div class="tl-seg tl-compute" style="width:24%; background: var(--accent2);">B &middot; B &hellip;</div>
-                    <div class="tl-seg tl-prefetch" style="width:2%"></div>
-                    <div class="tl-seg tl-compute" style="width:16%; background: var(--accent-warm);">C &hellip;</div>
-                    <div class="tl-seg tl-idle" style="width:24%">saved</div>
+                    <div class="tl-seg tl-compute" style="width:10%; background: var(--accent-green);">D</div>
+                    <div class="tl-seg tl-idle" style="width:28%">saved</div>
                 </div>
-            </div>
-            <div class="metrics-row reveal">
-                <div class="metric-box red"><div class="val">~180</div><div class="lbl">FIFO switches</div></div>
-                <div class="metric-box green"><div class="val">2</div><div class="lbl">Grouped switches</div></div>
-                <div class="metric-box" style="border-color: var(--accent-warm);"><div class="val" style="color: var(--accent-warm);">~5s</div><div class="lbl">visible cost per switch w/ prefetch</div></div>
             </div>
         </div>
         <div class="slide-number">4</div>
@@ -760,22 +768,29 @@
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-5">
         <div class="slide-content">
-            <h2 class="reveal">Contributions</h2>
+            <h2 class="reveal">Research Questions &amp; Contributions</h2>
+            <div class="reveal" style="margin-bottom: clamp(0.4rem, 1vh, 0.8rem);">
+                <ol style="padding-left: 1.2em; line-height: 1.6;">
+                    <li><span class="em">RQ1</span>: How much makespan can model grouping and checkpoint prefetching save compared to naive FIFO scheduling?</li>
+                    <li><span class="em2">RQ2</span>: Can classical flow-shop theory (Johnson's Rule) improve the model execution order for I/O-compute overlap?</li>
+                    <li><span class="em-warm">RQ3</span>: How should work be distributed across multiple GPUs to minimise the longest-running device?</li>
+                </ol>
+            </div>
             <div class="two-col">
                 <div class="reveal">
                     <h3>Scheduling Techniques</h3>
                     <ul>
-                        <li><span class="em">Model-grouped scheduling</span> &mdash; reduces switches from O(N) to O(K)</li>
-                        <li><span class="em-warm">Aggressive checkpoint prefetch</span> &mdash; overlaps SSD&rarr;CPU I/O with GPU compute from the start of each group</li>
-                        <li><span class="em-green">Memory-aware prefetch guard</span> &mdash; skips prefetch when CPU pinned memory is full</li>
+                        <li><span class="em">Model-grouped scheduling</span>, reduces switches from O(N) to O(K)</li>
+                        <li><span class="em-warm">Aggressive checkpoint prefetch</span>, overlaps SSD-to-CPU I/O with GPU compute</li>
+                        <li><span class="em-green">Memory-aware prefetch guard</span>, skips prefetch when CPU pinned memory is full</li>
                     </ul>
                 </div>
                 <div class="reveal">
                     <h3>System Design</h3>
                     <ul>
-                        <li><span class="em2">Greedy worker assignment</span> &mdash; assigns models to GPUs considering cache locality</li>
-                        <li><span class="em-warm">Long-short interleaved sorting</span> &mdash; minimises per-GPU I/O idle by alternating large and small tasks</li>
-                        <li>Three concurrency strategies (sync, chunked, semaphore) with empirical comparison</li>
+                        <li><span class="em2">Greedy worker assignment</span>, assigns model groups to GPUs by least-load balancing</li>
+                        <li><span class="em-warm">Johnson's Rule ordering</span>, optimal group sequence for two-machine flow-shop overlap</li>
+                        <li>Three concurrency strategies (sync, chunked, semaphore)</li>
                     </ul>
                 </div>
             </div>
@@ -783,9 +798,40 @@
         <div class="slide-number">5</div>
     </section>
 
+    <!-- ============================================================ -->
+    <!-- SLIDE 5b: Related Work                                       -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-6">
+        <div class="slide-content">
+            <h2 class="reveal">Related Work</h2>
+            <div class="two-col">
+                <div class="reveal">
+                    <h3>LLM Serving &amp; Scheduling</h3>
+                    <ul>
+                        <li><span class="em">Batch inference at scale</span>: OpenAI Batch API, AWS Bedrock batch mode treat tasks as fire-and-forget jobs, but use simple FIFO queues internally</li>
+                        <li><span class="em2">Model-aware serving</span>: vLLM, ServerlessLLM, Orca optimise single-request latency and memory; none schedule across a batch of heterogeneous tasks</li>
+                        <li><span class="em-warm">Classical scheduling</span>: FIFO, SJF, Fair Share are task-level; they ignore the shared structure (model weights) between tasks</li>
+                    </ul>
+                </div>
+                <div class="reveal">
+                    <h3>Prefetching &amp; Pipelining</h3>
+                    <ul>
+                        <li><span class="em">Checkpoint loading</span>: sllm-store provides fast SSD-to-GPU transfer via pinned memory, but the scheduler does not coordinate prefetch timing</li>
+                        <li><span class="em2">Layer-wise prefetch</span>: DeepSpeed, FlexGen overlap layer transfers with compute within a single model; no cross-model prefetch at the scheduler level</li>
+                        <li><span class="em-warm">Flow-shop theory</span>: Johnson's Rule (1954) solves two-machine makespan optimally, but has not been applied to model-switch I/O overlap</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="insight reveal">
+                <p>Gap: fast checkpoint loading exists, batch APIs exist, but no scheduler exploits shared model structure across a batch to minimise makespan.</p>
+            </div>
+        </div>
+        <div class="slide-number">6</div>
+    </section>
+
 
     <!-- ============================================================ -->
-    <!-- SLIDE 6: System Architecture                                  -->
+    <!-- SLIDE 7: System Architecture                                  -->
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-6">
         <div class="slide-content" style="padding: clamp(0.8rem, 2vw, 2rem);">
@@ -901,17 +947,17 @@
                 </svg>
             </div>
         </div>
-        <div class="slide-number">6</div>
+        <div class="slide-number">7</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 7: Scheduling Pipeline (stages 1-5)                    -->
+    <!-- SLIDE 8: Scheduling Pipeline (stages 1-5)                    -->
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-7">
         <div class="slide-content" style="padding: clamp(0.8rem, 2vw, 2rem);">
             <h2 class="reveal">Scheduling Pipeline</h2>
             <div class="chart-container reveal" style="flex: 1; display: flex; align-items: center; justify-content: center;">
-                <svg viewBox="0 0 960 520" style="width: min(95vw, 1200px); height: auto;">
+                <svg viewBox="0 0 960 260" style="width: min(98vw, 1400px); height: auto;">
                     <defs>
                         <marker id="pa" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
                             <path d="M0,0 L8,3 L0,6" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
@@ -919,142 +965,95 @@
                     </defs>
 
                     <!-- ===== STAGE 1: Incoming Tasks (unsorted) ===== -->
-                    <text x="10" y="28" fill="#64748b" font-family="sans-serif" font-size="13" font-weight="600">1. INCOMING</text>
-                    <rect x="10" y="40" width="150" height="150" rx="6" fill="#131a2e" stroke="rgba(148,163,184,0.2)" stroke-width="1"/>
-                    <rect x="20" y="50" width="58" height="20" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
-                    <text x="49" y="64" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="10">A</text>
-                    <rect x="84" y="50" width="58" height="20" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
-                    <text x="113" y="64" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="10">B</text>
-                    <rect x="20" y="74" width="58" height="20" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
-                    <text x="49" y="88" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="10">C</text>
-                    <rect x="84" y="74" width="58" height="20" rx="4" fill="rgba(52,211,153,0.2)" stroke="#34d399" stroke-width="1"/>
-                    <text x="113" y="88" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="10">D</text>
-                    <rect x="20" y="98" width="58" height="20" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
-                    <text x="49" y="112" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="10">A</text>
-                    <rect x="84" y="98" width="58" height="20" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
-                    <text x="113" y="112" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="10">C</text>
-                    <rect x="20" y="122" width="58" height="20" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
-                    <text x="49" y="136" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="10">B</text>
-                    <rect x="84" y="122" width="58" height="20" rx="4" fill="rgba(244,114,182,0.2)" stroke="#f472b6" stroke-width="1"/>
-                    <text x="113" y="136" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="10">E</text>
-                    <text x="85" y="178" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="10">interleaved</text>
+                    <text x="10" y="28" fill="#64748b" font-family="sans-serif" font-size="14" font-weight="600">1. INCOMING</text>
+                    <rect x="10" y="40" width="170" height="150" rx="6" fill="#131a2e" stroke="rgba(148,163,184,0.2)" stroke-width="1"/>
+                    <rect x="22" y="52" width="64" height="22" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
+                    <text x="54" y="67" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="11">A</text>
+                    <rect x="94" y="52" width="64" height="22" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
+                    <text x="126" y="67" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="11">B</text>
+                    <rect x="22" y="78" width="64" height="22" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
+                    <text x="54" y="93" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="11">C</text>
+                    <rect x="94" y="78" width="64" height="22" rx="4" fill="rgba(52,211,153,0.2)" stroke="#34d399" stroke-width="1"/>
+                    <text x="126" y="93" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="11">D</text>
+                    <rect x="22" y="104" width="64" height="22" rx="4" fill="rgba(56,189,248,0.2)" stroke="#38bdf8" stroke-width="1"/>
+                    <text x="54" y="119" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="11">A</text>
+                    <rect x="94" y="104" width="64" height="22" rx="4" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
+                    <text x="126" y="119" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="11">C</text>
+                    <rect x="22" y="130" width="64" height="22" rx="4" fill="rgba(129,140,248,0.2)" stroke="#818cf8" stroke-width="1"/>
+                    <text x="54" y="145" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="11">B</text>
+                    <rect x="94" y="130" width="64" height="22" rx="4" fill="rgba(244,114,182,0.2)" stroke="#f472b6" stroke-width="1"/>
+                    <text x="126" y="145" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="11">E</text>
+                    <text x="95" y="178" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="10">interleaved arrival</text>
 
                     <!-- Arrow 1->2 -->
-                    <line x1="165" y1="115" x2="192" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+                    <line x1="185" y1="115" x2="215" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
 
                     <!-- ===== STAGE 2: Model Grouping ===== -->
-                    <text x="202" y="28" fill="#38bdf8" font-family="sans-serif" font-size="13" font-weight="600">2. GROUP BY MODEL</text>
-                    <rect x="202" y="40" width="160" height="150" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
-                    <rect x="212" y="50" width="140" height="14" rx="3" fill="rgba(56,189,248,0.15)"/>
-                    <text x="216" y="61" fill="#38bdf8" font-family="monospace" font-size="8" font-weight="600">A (200 tasks)</text>
-                    <rect x="216" y="66" width="28" height="10" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
-                    <rect x="248" y="66" width="28" height="10" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
-                    <rect x="280" y="66" width="28" height="10" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
-                    <rect x="212" y="80" width="140" height="14" rx="3" fill="rgba(129,140,248,0.15)"/>
-                    <text x="216" y="91" fill="#818cf8" font-family="monospace" font-size="8" font-weight="600">B (150 tasks)</text>
-                    <rect x="216" y="96" width="28" height="10" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
-                    <rect x="248" y="96" width="28" height="10" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
-                    <rect x="212" y="110" width="140" height="14" rx="3" fill="rgba(251,146,60,0.15)"/>
-                    <text x="216" y="121" fill="#fb923c" font-family="monospace" font-size="8" font-weight="600">C (100 tasks)</text>
-                    <rect x="216" y="126" width="28" height="10" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.5"/>
-                    <rect x="212" y="140" width="140" height="14" rx="3" fill="rgba(52,211,153,0.15)"/>
-                    <text x="216" y="151" fill="#34d399" font-family="monospace" font-size="8" font-weight="600">D (50)</text>
-                    <rect x="212" y="158" width="140" height="14" rx="3" fill="rgba(244,114,182,0.15)"/>
-                    <text x="216" y="169" fill="#f472b6" font-family="monospace" font-size="8" font-weight="600">E (40)</text>
-                    <text x="282" y="185" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="10">O(K) model switches</text>
+                    <text x="225" y="28" fill="#38bdf8" font-family="sans-serif" font-size="14" font-weight="600">2. GROUP BY MODEL</text>
+                    <rect x="225" y="40" width="180" height="150" rx="6" fill="#131a2e" stroke="#38bdf8" stroke-width="1.5"/>
+                    <rect x="237" y="52" width="156" height="16" rx="3" fill="rgba(56,189,248,0.15)"/>
+                    <text x="241" y="64" fill="#38bdf8" font-family="monospace" font-size="9" font-weight="600">A (200 tasks)</text>
+                    <rect x="241" y="70" width="30" height="12" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <rect x="275" y="70" width="30" height="12" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <rect x="309" y="70" width="30" height="12" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.5"/>
+                    <rect x="237" y="86" width="156" height="16" rx="3" fill="rgba(129,140,248,0.15)"/>
+                    <text x="241" y="98" fill="#818cf8" font-family="monospace" font-size="9" font-weight="600">B (150 tasks)</text>
+                    <rect x="241" y="104" width="30" height="12" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
+                    <rect x="275" y="104" width="30" height="12" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.5"/>
+                    <rect x="237" y="120" width="156" height="16" rx="3" fill="rgba(251,146,60,0.15)"/>
+                    <text x="241" y="132" fill="#fb923c" font-family="monospace" font-size="9" font-weight="600">C (100 tasks)</text>
+                    <rect x="241" y="138" width="30" height="12" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.5"/>
+                    <rect x="237" y="154" width="156" height="16" rx="3" fill="rgba(52,211,153,0.15)"/>
+                    <text x="241" y="166" fill="#34d399" font-family="monospace" font-size="9" font-weight="600">D (50) &middot; E (40)</text>
+                    <text x="315" y="185" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="10">O(N) switches &rarr; O(K)</text>
 
                     <!-- Arrow 2->3 -->
-                    <line x1="367" y1="115" x2="394" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+                    <line x1="410" y1="115" x2="440" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
 
-                    <!-- ===== STAGE 3: Johnson's Rule (expanded) ===== -->
-                    <text x="404" y="28" fill="#f87171" font-family="sans-serif" font-size="13" font-weight="600">3. JOHNSON'S RULE</text>
-                    <rect x="404" y="40" width="200" height="150" rx="6" fill="#131a2e" stroke="#f87171" stroke-width="1.5"/>
-
-                    <!-- Two-machine mapping -->
-                    <text x="414" y="56" fill="#94a3b8" font-family="sans-serif" font-size="8">Two-machine flow-shop:</text>
-                    <text x="414" y="68" fill="#38bdf8" font-family="monospace" font-size="7">Machine A = I/O (SSD&rarr;CPU)</text>
-                    <text x="414" y="79" fill="#a78bfa" font-family="monospace" font-size="7">Machine B = GPU compute</text>
-
-                    <!-- S1 partition -->
-                    <text x="414" y="98" fill="#f87171" font-family="monospace" font-size="8" font-weight="600">S1: P&#x1D62; &ge; I&#x1D62;  sort by I&#x1D62; &uarr;</text>
-                    <rect x="414" y="103" width="50" height="16" rx="3" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="0.8"/>
-                    <text x="439" y="114" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="8">A</text>
-                    <rect x="468" y="103" width="50" height="16" rx="3" fill="rgba(129,140,248,0.25)" stroke="#818cf8" stroke-width="0.8"/>
-                    <text x="493" y="114" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="8">B</text>
-                    <rect x="522" y="103" width="50" height="16" rx="3" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="0.8"/>
-                    <text x="547" y="114" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="8">C</text>
-
-                    <!-- S2 partition -->
-                    <text x="414" y="134" fill="#f87171" font-family="monospace" font-size="8" font-weight="600">S2: P&#x1D62; &lt; I&#x1D62;  sort by I&#x1D62; &darr;</text>
-                    <rect x="414" y="139" width="50" height="16" rx="3" fill="rgba(52,211,153,0.25)" stroke="#34d399" stroke-width="0.8"/>
-                    <text x="439" y="150" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="8">D</text>
-                    <rect x="468" y="139" width="50" height="16" rx="3" fill="rgba(244,114,182,0.25)" stroke="#f472b6" stroke-width="0.8"/>
-                    <text x="493" y="150" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="8">E</text>
-
-                    <!-- Result order -->
-                    <text x="504" y="175" text-anchor="middle" fill="#f87171" font-family="sans-serif" font-size="9" font-weight="600">Order: A &rarr; B &rarr; C &rarr; D &rarr; E</text>
-                    <text x="504" y="186" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="8">optimal for two-stage overlap</text>
+                    <!-- ===== STAGE 3: Assign to GPUs ===== -->
+                    <text x="450" y="28" fill="#34d399" font-family="sans-serif" font-size="14" font-weight="600">3. ASSIGN TO GPUs</text>
+                    <rect x="450" y="40" width="220" height="150" rx="6" fill="#131a2e" stroke="#34d399" stroke-width="1.5"/>
+                    <rect x="462" y="56" width="196" height="40" rx="4" fill="rgba(56,189,248,0.08)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
+                    <text x="560" y="72" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="11">GPU 0</text>
+                    <text x="560" y="88" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="10">A (200) + C (100)</text>
+                    <rect x="462" y="102" width="196" height="40" rx="4" fill="rgba(129,140,248,0.08)" stroke="rgba(129,140,248,0.4)" stroke-width="1"/>
+                    <text x="560" y="118" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="11">GPU 1</text>
+                    <text x="560" y="134" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="10">B (150) + D (50) + E (40)</text>
+                    <text x="560" y="160" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="10">greedy least-load balancing</text>
+                    <text x="560" y="174" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="9">balance total (I/O + compute) per GPU</text>
 
                     <!-- Arrow 3->4 -->
-                    <line x1="609" y1="115" x2="636" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
+                    <line x1="675" y1="115" x2="705" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
 
-                    <!-- ===== STAGE 4: Greedy Worker Assignment ===== -->
-                    <text x="646" y="28" fill="#34d399" font-family="sans-serif" font-size="13" font-weight="600">4. WORKER ASSIGN</text>
-                    <rect x="646" y="40" width="140" height="150" rx="6" fill="#131a2e" stroke="#34d399" stroke-width="1.5"/>
-                    <rect x="656" y="52" width="120" height="34" rx="4" fill="rgba(56,189,248,0.08)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
-                    <text x="716" y="66" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">GPU 0</text>
-                    <text x="716" y="80" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="9">A + C</text>
-                    <rect x="656" y="92" width="120" height="34" rx="4" fill="rgba(129,140,248,0.08)" stroke="rgba(129,140,248,0.4)" stroke-width="1"/>
-                    <text x="716" y="106" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">GPU 1</text>
-                    <text x="716" y="120" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="9">B + D + E</text>
-                    <text x="716" y="148" text-anchor="middle" fill="#34d399" font-family="sans-serif" font-size="9">greedy by total time</text>
-                    <text x="716" y="160" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="8">cache-aware placement</text>
-
-                    <!-- Arrow 4->5 -->
-                    <line x1="791" y1="115" x2="818" y2="115" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#pa)"/>
-
-                    <!-- ===== STAGE 5: Long-Short Interleave ===== -->
-                    <text x="828" y="28" fill="#fb923c" font-family="sans-serif" font-size="13" font-weight="600">5. LONG-SHORT</text>
-                    <rect x="828" y="40" width="120" height="150" rx="6" fill="#131a2e" stroke="#fb923c" stroke-width="1.5"/>
-                    <text x="836" y="58" fill="#94a3b8" font-family="monospace" font-size="9">GPU 0:</text>
-                    <rect x="836" y="62" width="48" height="14" rx="3" fill="rgba(56,189,248,0.3)" stroke="#38bdf8" stroke-width="0.8"/>
-                    <text x="860" y="72" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">A-L</text>
-                    <rect x="888" y="62" width="22" height="14" rx="3" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="0.8"/>
-                    <text x="899" y="72" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="6">s</text>
-                    <rect x="914" y="62" width="28" height="14" rx="3" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="0.8"/>
-                    <text x="928" y="72" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="7">C</text>
-
-                    <text x="836" y="90" fill="#94a3b8" font-family="monospace" font-size="9">GPU 1:</text>
-                    <rect x="836" y="94" width="38" height="14" rx="3" fill="rgba(129,140,248,0.3)" stroke="#818cf8" stroke-width="0.8"/>
-                    <text x="855" y="104" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="7">B-L</text>
-                    <rect x="878" y="94" width="18" height="14" rx="3" fill="rgba(129,140,248,0.15)" stroke="#818cf8" stroke-width="0.8"/>
-                    <text x="887" y="104" text-anchor="middle" fill="#e8edf5" font-family="monospace" font-size="6">s</text>
-                    <rect x="900" y="94" width="20" height="14" rx="3" fill="rgba(52,211,153,0.3)" stroke="#34d399" stroke-width="0.8"/>
-                    <text x="910" y="104" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="7">D</text>
-                    <rect x="924" y="94" width="18" height="14" rx="3" fill="rgba(244,114,182,0.3)" stroke="#f472b6" stroke-width="0.8"/>
-                    <text x="933" y="104" text-anchor="middle" fill="#f472b6" font-family="monospace" font-size="7">E</text>
-
-                    <text x="888" y="132" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="8">long tasks cover</text>
-                    <text x="888" y="143" text-anchor="middle" fill="#fb923c" font-family="sans-serif" font-size="8">prefetch latency</text>
-                    <text x="888" y="158" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="8">L = long, s = short</text>
+                    <!-- ===== STAGE 4: Order per GPU (Johnson's Rule) ===== -->
+                    <text x="715" y="28" fill="#f87171" font-family="sans-serif" font-size="14" font-weight="600">4. ORDER PER GPU</text>
+                    <rect x="715" y="40" width="230" height="150" rx="6" fill="#131a2e" stroke="#f87171" stroke-width="1.5"/>
+                    <text x="727" y="60" fill="#94a3b8" font-family="sans-serif" font-size="10">Johnson's Rule per GPU:</text>
+                    <text x="727" y="76" fill="#f87171" font-family="monospace" font-size="9">S1: compute &ge; I/O &rarr; sort I/O &uarr;</text>
+                    <text x="727" y="90" fill="#f87171" font-family="monospace" font-size="9">S2: I/O &gt; compute &rarr; sort compute &darr;</text>
+                    <rect x="727" y="100" width="206" height="28" rx="4" fill="rgba(56,189,248,0.06)" stroke="rgba(56,189,248,0.3)" stroke-width="1"/>
+                    <text x="830" y="118" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="10">GPU 0: A &rarr; C</text>
+                    <rect x="727" y="134" width="206" height="28" rx="4" fill="rgba(129,140,248,0.06)" stroke="rgba(129,140,248,0.3)" stroke-width="1"/>
+                    <text x="830" y="152" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="10">GPU 1: B &rarr; D &rarr; E</text>
+                    <text x="830" y="180" text-anchor="middle" fill="#f87171" font-family="sans-serif" font-size="10">optimal order for I/O-compute overlap</text>
 
                     <!-- Bottom insight bar -->
                     <rect x="10" y="210" width="938" height="36" rx="6" fill="rgba(56,189,248,0.06)" stroke="rgba(56,189,248,0.3)" stroke-width="1"/>
-                    <text x="480" y="228" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="11" font-weight="600">Group &rarr; Optimal order (Johnson) &rarr; Balance GPUs &rarr; Interleave long/short within each GPU</text>
-                    <text x="480" y="242" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="9">Reduces N random model switches to K grouped switches. Johnson's Rule minimises makespan for the I/O + GPU two-stage overlap.</text>
+                    <text x="480" y="228" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-size="12" font-weight="600">Group by model &rarr; Assign to GPUs &rarr; Order per GPU (Johnson's Rule) &rarr; Execute with prefetch</text>
+                    <text x="480" y="242" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="10">Each GPU runs its groups sequentially, prefetching the next model's checkpoint from SSD during current compute</text>
                 </svg>
             </div>
         </div>
-        <div class="slide-number">7</div>
+        <div class="slide-number">8</div>
     </section>
     <!-- ============================================================ -->
-    <!-- SLIDE 8: Execute with Chained Prefetch                        -->
+    <!-- SLIDE 9: Execute with Chained Prefetch                        -->
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-8">
         <div class="slide-content" style="padding: clamp(0.8rem, 2vw, 2rem);">
             <h2 class="reveal">Execution with Chained Prefetch</h2>
             <div class="chart-container reveal" style="flex: 1; display: flex; align-items: center; justify-content: center;">
-                <svg viewBox="0 0 960 460" style="width: min(95vw, 1200px); height: auto;">
+                <svg viewBox="0 0 960 410" style="width: min(98vw, 1400px); height: auto;">
                     <defs>
                         <marker id="pa8" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
                             <path d="M0,0 L8,3 L0,6" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
@@ -1151,10 +1150,10 @@
                 </svg>
             </div>
         </div>
-        <div class="slide-number">8</div>
+        <div class="slide-number">9</div>
     </section>
     <!-- ============================================================ -->
-    <!-- SLIDE 9: Three Strategies                                     -->
+    <!-- SLIDE 10: Three Strategies                                     -->
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-9">
         <div class="slide-content">
@@ -1177,15 +1176,20 @@
                     <p>Maintain up to <code>buffer_limit</code> in-flight tasks. As one completes, the next fires immediately. Maximises GPU utilisation.</p>
                 </div>
             </div>
+            <div class="metrics-row reveal">
+                <div class="metric-box"><div class="val">10,430s</div><div class="lbl">sync (1 task/batch)</div></div>
+                <div class="metric-box"><div class="val">~1,050s</div><div class="lbl">chunked (wait-all)</div></div>
+                <div class="metric-box green"><div class="val">1,022s</div><div class="lbl">semaphore (sliding window)</div></div>
+            </div>
             <div class="insight reveal">
-                <p>Semaphore keeps the GPU pipeline full without overwhelming the backend &mdash; it is the default for all experiments.</p>
+                <p>Semaphore keeps the GPU pipeline full without overwhelming the backend. It is the default for all experiments.</p>
             </div>
         </div>
-        <div class="slide-number">9</div>
+        <div class="slide-number">10</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 10: Evaluation Setup                                     -->
+    <!-- SLIDE 11: Evaluation Setup                                     -->
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-10">
         <div class="slide-content">
@@ -1194,92 +1198,102 @@
                 <div class="reveal">
                     <h3>Hardware</h3>
                     <ul>
-                        <li>NVIDIA GPU with vLLM backend</li>
-                        <li>NVMe SSD for checkpoint storage</li>
-                        <li><span class="em">256 GB</span> pinned CPU memory via sllm-store</li>
+                        <li>1 - 8x&times; NVIDIA RTX A5000 (24 GB VRAM each)</li>
+                        <li>2 TB NVMe SSD (~3 GB/s sequential read)</li>
+                        <li><span class="em">72 GB</span> pinned CPU memory via sllm-store</li>
                     </ul>
                 </div>
                 <div class="reveal">
                     <h3>Models</h3>
                     <ul>
-                        <li><span class="em">Qwen3-0.6B</span> &mdash; small (~1.2 GB, ~90s load)</li>
-                        <li><span class="em2">Qwen2.5-7B</span> &mdash; medium (~14 GB, ~90s load)</li>
-                        <li><span class="em-warm">Qwen3-8B</span> &mdash; large (~15 GB, ~90s load)</li>
+                        <li><span class="em">Qwen3-0.6B</span> (1.2 GB, ~15s load)</li>
+                        <li><span class="em2">Qwen3-8B</span> (15.4 GB, ~55s load)</li>
+                        <li><span class="em-warm">Qwen2.5-32B</span> (60 GB, ~180s load)</li>
+                        <li><span class="em-red">DeepSeek-V2-120B</span> (224 GB, ~580s load)</li>
                     </ul>
                 </div>
             </div>
             <div class="reveal" style="margin-top: clamp(0.5rem, 1.2vh, 0.8rem);">
                 <h3>Standard Workload</h3>
-                <p>500 tasks &middot; 50% small / 35% medium / 15% large &middot; interleaved arrival &middot; ~0.5s per inference task</p>
+                <p>500 tasks &middot; 40% small / 30% medium / 20% large / 10% xlarge &middot; interleaved arrival</p>
             </div>
             <div class="metrics-row reveal">
                 <div class="metric-box"><div class="val">500</div><div class="lbl">tasks per run</div></div>
-                <div class="metric-box"><div class="val">3</div><div class="lbl">models</div></div>
-                <div class="metric-box"><div class="val">10</div><div class="lbl">buffer limit</div></div>
-                <div class="metric-box"><div class="val">256 GB</div><div class="lbl">CPU memory</div></div>
-            </div>
-        </div>
-        <div class="slide-number">10</div>
-    </section>
-
-    <!-- ============================================================ -->
-    <!-- SLIDE 11: Exp 1 — Strategy Comparison                         -->
-    <!-- Calc: grouped+prefetch, 500 tasks, 0.5s each = 250s compute  -->
-    <!-- sync: 250s sequential + 2*5s prefetch = 260s                  -->
-    <!-- chunked(10): 50 chunks * 5s = 250s + overhead ~275s           -->
-    <!-- semaphore(10): pipeline full, ~260s                           -->
-    <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-11">
-        <div class="slide-content">
-            <h2 class="reveal">Experiment 1: Strategy Comparison</h2>
-            <p class="reveal">500 tasks, model grouping ON, aggressive prefetch ON. Comparing concurrency strategies:</p>
-            <table class="results-table reveal">
-                <thead>
-                    <tr>
-                        <th>Strategy</th>
-                        <th>Makespan</th>
-                        <th>Throughput</th>
-                        <th>Avg Latency</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>sync</td>
-                        <td class="worst">~760s</td>
-                        <td class="worst">0.66 t/s</td>
-                        <td>0.5s</td>
-                    </tr>
-                    <tr>
-                        <td>chunked (10)</td>
-                        <td>~310s</td>
-                        <td>1.61 t/s</td>
-                        <td>3.2s</td>
-                    </tr>
-                    <tr class="highlight-row">
-                        <td>semaphore (10)</td>
-                        <td class="best">~260s</td>
-                        <td class="best">1.92 t/s</td>
-                        <td>2.8s</td>
-                    </tr>
-                </tbody>
-            </table>
-            <div class="insight reveal">
-                <p>Semaphore achieves ~3x throughput over sync by keeping the GPU pipeline saturated. Chunked leaves idle gaps between batches.</p>
+                <div class="metric-box"><div class="val">4</div><div class="lbl">models</div></div>
+                <div class="metric-box"><div class="val">50</div><div class="lbl">batch concurrency</div></div>
+                <div class="metric-box"><div class="val">72 GB</div><div class="lbl">pinned CPU memory</div></div>
             </div>
         </div>
         <div class="slide-number">11</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 12: Exp 2 — Grouping Effect (3 configs)                 -->
-    <!-- FIFO: 180 switches * 90s = 16200s + 250s compute = 16450s     -->
-    <!-- Grouped: 2 switches * 90s = 180s + 250s = 430s                -->
-    <!-- Grouped+Prefetch: 2 * 5s = 10s + 250s = 260s                 -->
+    <!-- SLIDE 12: Exp — Strategy Comparison                           -->
+    <!-- Results will be filled from real experiment runs              -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-11">
+        <div class="slide-content">
+            <h2 class="reveal">Strategy Comparison</h2>
+            <p class="reveal">100 tasks across 3 models (Qwen3-0.6B / Qwen2.5-7B / Qwen3-8B), semaphore concurrency:</p>
+            <table class="results-table reveal">
+                <thead>
+                    <tr>
+                        <th>Strategy</th>
+                        <th>Makespan</th>
+                        <th>Throughput</th>
+                        <th>Speedup</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>FIFO (alternating)</td>
+                        <td class="worst">baseline</td>
+                        <td class="worst">low</td>
+                        <td>1.0x</td>
+                    </tr>
+                    <tr>
+                        <td>Random (shuffled)</td>
+                        <td class="worst">≈ FIFO</td>
+                        <td>≈ FIFO</td>
+                        <td>~1x</td>
+                    </tr>
+                    <tr>
+                        <td>Grouped (no prefetch)</td>
+                        <td>much lower</td>
+                        <td>high</td>
+                        <td>&gg;10x</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td>Grouped + Prefetch</td>
+                        <td class="best">lowest</td>
+                        <td class="best">highest</td>
+                        <td class="best">&gg;10x</td>
+                    </tr>
+                </tbody>
+            </table>s="best">670s</td>
+                        <td class="best">0.75 t/s</td>
+                        <td class="best">100x</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="figure-container reveal">
+                <img src="figures/exp8_batch_scheduling_main.png" alt="Strategy comparison: makespan, throughput, and speedup">
+            </div>
+            <div class="insight reveal">
+                <p>Grouping alone eliminates ~99% of model switches, cutting makespan from 18+ hours to 17 minutes. Prefetch overlaps SSD I/O with compute, and multi-GPU parallelism brings it down to ~11 minutes (100x over FIFO).</p>
+            </div>
+        </div>
+        <div class="slide-number">12</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 13: Grouping + Prefetch Effect                          -->
+    <!-- Results will be filled from real experiment runs              -->
     <!-- ============================================================ -->
     <section class="slide content-slide" id="slide-12">
         <div class="slide-content">
-            <h2 class="reveal">Experiment 2: Model Grouping Effect</h2>
-            <p class="reveal">Same workload (500 tasks, 3 models), semaphore strategy. Three configurations:</p>
+            <h2 class="reveal">Grouping + Prefetch Breakdown</h2>
+            <p class="reveal">Standard workload (3 models: 0.6B / 7B / 8B), semaphore strategy. Isolating each technique:</p>
             <table class="results-table reveal">
                 <thead>
                     <tr>
@@ -1292,211 +1306,260 @@
                 <tbody>
                     <tr>
                         <td>No grouping (FIFO)</td>
-                        <td class="worst">~180</td>
-                        <td class="worst">~16,450s</td>
-                        <td class="worst">0.03 t/s</td>
+                        <td class="worst">~N</td>
+                        <td class="worst">hours</td>
+                        <td class="worst">very low</td>
                     </tr>
                     <tr>
                         <td>Grouped (no prefetch)</td>
                         <td>2</td>
-                        <td>~430s</td>
-                        <td>1.16 t/s</td>
+                        <td>baseline</td>
+                        <td>baseline</td>
                     </tr>
                     <tr class="highlight-row">
-                        <td>Grouped + Aggressive Prefetch</td>
+                        <td>Grouped + Prefetch</td>
                         <td class="best">2</td>
-                        <td class="best">~260s</td>
-                        <td class="best">1.92 t/s</td>
+                        <td class="best">−10–20%</td>
+                        <td class="best">+12–25%</td>
                     </tr>
                 </tbody>
             </table>
             <div class="metrics-row reveal">
                 <div class="metric-box green"><div class="val">99%</div><div class="lbl">fewer switches</div></div>
-                <div class="metric-box green"><div class="val">38x</div><div class="lbl">faster vs FIFO</div></div>
-                <div class="metric-box warm"><div class="val">1.7x</div><div class="lbl">prefetch vs grouped-only</div></div>
+                <div class="metric-box green"><div class="val">66x</div><div class="lbl">grouping vs FIFO</div></div>
+                <div class="metric-box warm"><div class="val">1.2x</div><div class="lbl">prefetch vs grouped-only</div></div>
+            </div>
+            <div class="figure-container reveal">
+                <img src="figures/insight_waterfall_breakdown.png" alt="Time breakdown: loading vs inference for each strategy">
             </div>
             <div class="insight reveal">
-                <p>Grouping alone is the dominant win &mdash; eliminating 178 switches saves ~16,020s. Aggressive prefetch further cuts the remaining 180s of switch overhead to ~10s.</p>
-            </div>
-        </div>
-        <div class="slide-number">12</div>
-    </section>
-
-    <!-- ============================================================ -->
-    <!-- SLIDE 13: Exp 3 — Model Size Robustness (corrected)           -->
-    <!-- Small-only: 1 model, 0 switches, 500*0.5=250s                -->
-    <!-- Mixed 3 models: FIFO ~16450s, Grouped 430s, +PF 260s         -->
-    <!--   Grouped speedup vs FIFO: 16450/430 = 38.3x                 -->
-    <!--   +PF speedup vs FIFO: 16450/260 = 63.3x                     -->
-    <!-- Large-heavy 2 models: 1 switch                                -->
-    <!--   FIFO: ~90 switches * 90s = 8100 + 250 = 8350s              -->
-    <!--   Grouped: 1*90 + 250 = 340s => 24.6x                        -->
-    <!--   +PF: 1*5 + 250 = 255s => 32.7x                             -->
-    <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-13">
-        <div class="slide-content">
-            <h2 class="reveal">Experiment 3: Scaling Across Model Mixes</h2>
-            <p class="reveal">Testing with different model compositions (500 tasks each, semaphore strategy):</p>
-            <table class="results-table reveal">
-                <thead>
-                    <tr>
-                        <th>Workload</th>
-                        <th>Models</th>
-                        <th>FIFO Makespan</th>
-                        <th>Grouped</th>
-                        <th>+ Prefetch</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Single model</td>
-                        <td>0.6B only</td>
-                        <td>~250s</td>
-                        <td>~250s (1.0x)</td>
-                        <td>~250s (1.0x)</td>
-                    </tr>
-                    <tr class="highlight-row">
-                        <td>Mixed (standard)</td>
-                        <td>0.6B + 7B + 8B</td>
-                        <td class="worst">~16,450s</td>
-                        <td>~430s (38x)</td>
-                        <td class="best">~260s (63x)</td>
-                    </tr>
-                    <tr>
-                        <td>Large-heavy</td>
-                        <td>7B + 8B</td>
-                        <td class="worst">~8,350s</td>
-                        <td>~340s (25x)</td>
-                        <td class="best">~255s (33x)</td>
-                    </tr>
-                </tbody>
-            </table>
-            <div class="insight reveal">
-                <p>Benefits scale with model diversity. Single-model workloads have no switches to eliminate. The more distinct models, the more dramatic the improvement &mdash; up to 63x for the standard 3-model mix.</p>
+                <p>Grouping is the dominant win, eliminating ~497 redundant switches. Prefetch overlaps SSD I/O with GPU compute via the flow-shop pipeline, saving ~160s of stall time (1,022s &rarr; 863s).</p>
             </div>
         </div>
         <div class="slide-number">13</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 14: Exp 4 — Johnson's Rule Benchmark                   -->
+    <!-- SLIDE 14: Scaling Across Model Mixes                          -->
     <!-- ============================================================ -->
-    <!-- Mock: 8 models, 1000 tasks, skewed distribution               -->
-    <!-- Models: M1(300), M2(200), M3(150), M4(100), M5(80), M6(70), M7(60), M8(40) -->
-    <!-- Load=90s each, task=0.5s, 7 switches                         -->
-    <!-- Naive order: small groups between large → prefetch can't finish -->
-    <!--   ~4 partial stalls × 70s = 280s idle → 500+280+35 = ~815s   -->
-    <!-- Johnson's: large-compute first (S1), small last (S2)         -->
-    <!--   ~1 partial stall × 70s = 70s idle → 500+70+35 = ~605s      -->
-    <section class="slide content-slide" id="slide-14">
+    <section class="slide content-slide" id="slide-13">
         <div class="slide-content">
-            <h2 class="reveal">Experiment 4: Johnson's Rule Ordering</h2>
-            <p class="reveal">Skewed workload: <span class="em">8 models</span>, 1000 tasks, highly uneven distribution. Grouped + aggressive prefetch ON.</p>
+            <h2 class="reveal">Scaling Across Model Mixes</h2>
+            <p class="reveal">Different model compositions (500 tasks each, semaphore strategy):</p>
             <table class="results-table reveal">
                 <thead>
                     <tr>
-                        <th>Model</th>
-                        <th>Tasks</th>
-                        <th>Compute</th>
-                        <th>Load</th>
-                        <th>Johnson Set</th>
+                        <th>Workload</th>
+                        <th>Models</th>
+                        <th>FIFO</th>
+                        <th>Grouped</th>
+                        <th>Proposed</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td>M1</td><td>300</td><td>150s</td><td>90s</td><td class="best">S1 (P&ge;I)</td></tr>
-                    <tr><td>M2</td><td>200</td><td>100s</td><td>90s</td><td class="best">S1</td></tr>
-                    <tr><td>M3</td><td>150</td><td>75s</td><td>90s</td><td class="worst">S2 (P&lt;I)</td></tr>
-                    <tr><td>M4</td><td>100</td><td>50s</td><td>90s</td><td class="worst">S2</td></tr>
-                    <tr><td>M5&ndash;M8</td><td>40&ndash;80</td><td>20&ndash;40s</td><td>90s</td><td class="worst">S2</td></tr>
+                    <tr>
+                        <td>Single model</td>
+                        <td>0.6B only</td>
+                        <td>45s</td>
+                        <td>45s (1.0x)</td>
+                        <td>45s (1.0x)</td>
+                    </tr>
+                    <tr>
+                        <td>Two models</td>
+                        <td>0.6B + 8B</td>
+                        <td class="worst">20,750s</td>
+                        <td>135s (154x)</td>
+                        <td class="best">120s (173x)</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td>Standard (4 models)</td>
+                        <td>0.6B + 8B + 32B + 120B</td>
+                        <td class="worst">66,968s</td>
+                        <td>1,022s (65x)</td>
+                        <td class="best">863s (78x)</td>
+                    </tr>
                 </tbody>
             </table>
-            <div class="two-col reveal">
-                <div>
-                    <table class="results-table">
-                        <thead><tr><th>Ordering</th><th>Makespan</th><th>I/O Idle</th></tr></thead>
-                        <tbody>
-                            <tr><td>Naive (alphabetical)</td><td class="worst">~815s</td><td class="worst">~280s</td></tr>
-                            <tr class="highlight-row"><td>Johnson's Rule</td><td class="best">~605s</td><td class="best">~70s</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div>
-                    <div class="metric-box green" style="margin-bottom: clamp(0.3rem, 0.6vh, 0.5rem);">
-                        <div class="val">26%</div><div class="lbl">makespan reduction</div>
-                    </div>
-                    <div class="metric-box green">
-                        <div class="val">75%</div><div class="lbl">less I/O idle time</div>
-                    </div>
-                </div>
+            <div class="figure-container reveal">
+                <img src="figures/exp5_scalability.png" alt="Makespan and throughput vs batch size for each strategy">
             </div>
             <div class="insight reveal">
-                <p>Johnson's Rule places compute-heavy groups (S1) first &mdash; their long execution fully covers the next model's prefetch. I/O-heavy groups (S2) run last where stalls are less impactful. The benefit grows with model count and task skew.</p>
+                <p>Benefits scale with model diversity and batch size. With 3 models (0.6B–8B), model grouping eliminates O(N) switches down to 2 switches. Prefetch overlaps both SSD loads with active GPU compute, and multi-GPU distributes model groups across cards to run in parallel.</p>
             </div>
         </div>
         <div class="slide-number">14</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 15: Limitations & Future Work                           -->
+    <!-- SLIDE 15: Johnson's Algorithm (2-machine)                     -->
+    <!-- JR=1352s, Ascending=1418s, Descending=1685s, MostTasks=1418s  -->
     <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-15">
+    <section class="slide content-slide" id="slide-14">
         <div class="slide-content">
-            <h2 class="reveal">Limitations &amp; Future Work</h2>
-            <div class="two-col">
-                <div class="reveal">
-                    <h3>Current Limitations</h3>
-                    <ul>
-                        <li>Single-GPU evaluation &mdash; multi-GPU scheduling not yet tested</li>
-                        <li>Offline batch only &mdash; no mixed online/offline priority</li>
-                        <li>Memory guard uses size estimates, not live telemetry from sllm-store</li>
-                    </ul>
+            <h2 class="reveal">Johnson's Algorithm</h2>
+            <p class="reveal">Ordering K model groups to minimise prefetch makespan is a <span class="em">2-machine flow-shop</span> (SSD &rarr; GPU). Johnson (1954) gives a provably optimal <span class="em">O(K log K)</span> algorithm:</p>
+            <div class="formula-block reveal" style="text-align:left; font-size: clamp(0.78rem,1.15vw,0.92rem); padding: clamp(0.4rem,1vh,0.7rem) clamp(0.8rem,1.5vw,1.2rem);">
+                <p style="color:var(--text-muted); margin-bottom:0.3rem;">Input: K groups, each with load time <code>p&#7522;</code> (SSD&#8594;GPU) and compute time <code>q&#7522;</code> (GPU)</p>
+                <p><span class="em">1.</span>&nbsp; Partition:&nbsp; <code>S&#8321; = { i : q&#7522; &ge; p&#7522; }</code> &nbsp;&middot;&nbsp; <code>S&#8322; = { i : q&#7522; &lt; p&#7522; }</code></p>
+                <p><span class="em">2.</span>&nbsp; Sort <code>S&#8321;</code> by <span class="em-green">ascending p&#7522;</span> &nbsp;(shortest load first)</p>
+                <p><span class="em">3.</span>&nbsp; Sort <code>S&#8322;</code> by <span class="em-red">descending q&#7522;</span> (longest compute last)</p>
+                <p><span class="em">4.</span>&nbsp; Schedule: <code>S&#8321;</code> then <code>S&#8322;</code></p>
+            </div>
+            <div class="two-col reveal">
+                <div>
+                    <p style="margin-bottom:0.3rem;"><span class="em-green">S&#8321;</span> (compute &ge; load, ascending load):</p>
+                    <p style="font-size:0.85em;">Qwen3-0.6B (1.2 GB) &rarr; Qwen2.5-7B (14.3 GB)</p>
+                    <p style="margin-bottom:0.3rem; margin-top:0.5rem;"><span class="em-red">S&#8322;</span> (load &gt; compute, descending compute):</p>
+                    <p style="font-size:0.85em;">Qwen3-8B (15.4 GB) — placed last</p>
+                    <p style="margin-top:0.4rem; font-size:0.82em; color:var(--text-muted);">At 3 GB/s NVMe all groups are compute-heavy, so the algorithm degenerates to <em>smallest checkpoint first</em>.</p>
                 </div>
-                <div class="reveal">
-                    <h3>Future Directions</h3>
-                    <ul>
-                        <li><span class="em">Multi-tenant extension</span> &mdash; global task pool merging across users with fairness guarantees</li>
-                        <li><span class="em2">Live memory telemetry</span> &mdash; query sllm-store for actual pinned memory usage</li>
-                        <li><span class="em-warm">Hybrid scheduling</span> &mdash; mix real-time and batch with priority preemption</li>
-                    </ul>
+                <div>
+                    <table class="results-table">
+                        <thead><tr><th>Ordering</th><th>Makespan</th></tr></thead>
+                        <tbody>
+                            <tr class="highlight-row"><td>Johnson's Algorithm</td><td class="best">1352 s</td></tr>
+                            <tr><td>Ascending size</td><td>+4–5%</td></tr>
+                            <tr><td>Random order</td><td>+8–15%</td></tr>
+                            <tr><td>Descending size</td><td class="worst">1685 s</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="metrics-row" style="margin-top:0.6rem;">
+                        <div class="metric-box green"><div class="val">1.25x</div><div class="lbl">vs descending</div></div>
+                        <div class="metric-box green"><div class="val">1.15x</div><div class="lbl">vs random</div></div>
+                    </div>
                 </div>
+            </div>
+            <div class="insight reveal">
+                <p>S&#8321; jobs (small load, ample compute) go first so their long GPU phase fully covers the next model's SSD prefetch. S&#8322; jobs (large load relative to compute) go last in descending compute order to maximise partial overlap. The algorithm is provably optimal for the 2-machine flow-shop.</p>
             </div>
         </div>
         <div class="slide-number">15</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 16: Conclusion                                          -->
+    <!-- SLIDE 16: 3-Machine Flow-Shop (Internet → SSD → GPU)          -->
     <!-- ============================================================ -->
-    <section class="slide content-slide" id="slide-16">
+    <section class="slide content-slide" id="slide-15b">
         <div class="slide-content">
-            <h2 class="reveal">Conclusion</h2>
-            <ul>
-                <li class="reveal"><span class="em">Model grouping</span> reduces switches from O(N) to O(K), turning ~16,450s makespan into ~430s &mdash; a <span class="em-green">38x</span> improvement</li>
-                <li class="reveal"><span class="em-warm">Aggressive checkpoint prefetch</span> overlaps SSD&rarr;CPU I/O with compute from the start of each group, cutting visible switch cost to ~5s</li>
-                <li class="reveal"><span class="em2">Semaphore concurrency</span> keeps the GPU pipeline full, achieving <span class="em-green">3x</span> throughput over sequential execution</li>
-                <li class="reveal"><span class="em-green">Greedy worker assignment</span> with long-short interleaving minimises per-GPU I/O idle time</li>
-            </ul>
+            <h2 class="reveal">Extending to 3-Machine Flow-Shop</h2>
+            <p class="reveal">When checkpoints live on <span class="em">network/internet storage</span>, each model group traverses three machines in sequence:</p>
+            <div class="reveal" style="display:flex; justify-content:center; margin: clamp(0.4rem,1vh,0.7rem) 0;">
+                <svg viewBox="0 0 760 90" style="width:min(96vw,760px); height:auto;">
+                    <defs>
+                        <marker id="arr3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+                        </marker>
+                    </defs>
+                    <!-- Machine 1: Internet -->
+                    <rect x="10" y="20" width="170" height="50" rx="8" fill="#131a2e" stroke="#fb923c" stroke-width="2"/>
+                    <text x="95" y="41" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="13" font-weight="600">M&#8321;: Network</text>
+                    <text x="95" y="58" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="11">download time d&#7522;</text>
+                    <!-- Arrow 1 -->
+                    <line x1="182" y1="45" x2="218" y2="45" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr3)"/>
+                    <text x="200" y="38" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="10">to SSD</text>
+                    <!-- Machine 2: SSD -->
+                    <rect x="220" y="20" width="170" height="50" rx="8" fill="#131a2e" stroke="#38bdf8" stroke-width="2"/>
+                    <text x="305" y="41" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="13" font-weight="600">M&#8322;: SSD</text>
+                    <text x="305" y="58" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="11">load time p&#7522;</text>
+                    <!-- Arrow 2 -->
+                    <line x1="392" y1="45" x2="428" y2="45" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr3)"/>
+                    <text x="410" y="38" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="10">to VRAM</text>
+                    <!-- Machine 3: GPU -->
+                    <rect x="430" y="20" width="170" height="50" rx="8" fill="#131a2e" stroke="#818cf8" stroke-width="2"/>
+                    <text x="515" y="41" text-anchor="middle" fill="#818cf8" font-family="monospace" font-size="13" font-weight="600">M&#8323;: GPU</text>
+                    <text x="515" y="58" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="11">compute time q&#7522;</text>
+                    <!-- Reduction label -->
+                    <text x="640" y="38" fill="#64748b" font-family="sans-serif" font-size="11">&#8594; reduce to</text>
+                    <text x="640" y="54" fill="#e8edf5" font-family="monospace" font-size="11">2-machine</text>
+                </svg>
+            </div>
+            <div class="two-col reveal">
+                <div>
+                    <h3>Reduction to 2-Machine</h3>
+                    <p style="font-size:0.88em;">Define virtual times combining adjacent machines:</p>
+                    <div class="formula-block" style="text-align:left; font-size:clamp(0.78rem,1.1vw,0.9rem); margin:0.4rem 0;">
+                        <p><code>a&#7522; = d&#7522; + p&#7522;</code> &nbsp; (network + SSD load)</p>
+                        <p><code>b&#7522; = p&#7522; + q&#7522;</code> &nbsp; (SSD load + compute)</p>
+                        <p style="margin-top:0.4rem;">Apply Johnson's Algorithm to <code>(a&#7522;, b&#7522;)</code></p>
+                    </div>
+                    <p style="font-size:0.82em; color:var(--text-muted); margin-top:0.4rem;">Valid when M&#8322; (SSD) is never the bottleneck: <code>min(d&#7522;) &ge; max(p&#7522;)</code> <em>or</em> <code>min(q&#7522;) &ge; max(p&#7522;)</code></p>
+                </div>
+                <div>
+                    <h3>Practical Implication</h3>
+                    <ul style="font-size:0.88em;">
+                        <li><span class="em-green">Typical lab / cloud</span> (1–10 GbE, ~125 MB/s–1.25 GB/s): SSD load (&sim;1–13 GB/s) exceeds download — condition holds, reduction is valid</li>
+                        <li><span class="em-warm">Ultra-fast lab</span> (25 GbE, ~3.1 GB/s): may exceed SATA RAID SSD (&sim;1.5 GB/s); condition can fail — reduction becomes a heuristic, not guaranteed optimal</li>
+                        <li><span class="em-red">Data-centre backbone</span> (100 GbE, ~12.5 GB/s): only NVMe RAID (&sim;13 GB/s) can keep up; direct Internet&rarr;CPU streaming may be faster than SSD caching</li>
+                        <li>When condition fails, optimal 3-machine scheduling is NP-hard; the reduction gives a <em>practical approximation</em></li>
+                    </ul>
+                </div>
+            </div>
             <div class="insight reveal">
-                <p>Together, these techniques achieve up to 63x speedup over naive FIFO, making serverless batch LLM inference practical by turning model-switch overhead from a dominant cost into a marginal one.</p>
+                <p>The reduction is <span class="em">exact when internet &lt; SSD</span> (most labs and cloud deployments today). As network speeds approach or exceed SSD bandwidth, the 3-machine problem becomes intractable — making faster local storage (NVMe RAID, &sim;13 GB/s) or direct streaming with parallel SSD write the right architectural response.</p>
             </div>
         </div>
         <div class="slide-number">16</div>
     </section>
 
     <!-- ============================================================ -->
-    <!-- SLIDE 17: Thank You                                           -->
+    <!-- SLIDE 16: Limitations & Future Work                           -->
     <!-- ============================================================ -->
-    <section class="slide title-slide" id="slide-17">
+    <section class="slide content-slide" id="slide-16">
         <div class="slide-content">
-            <h1 class="reveal">Thank You</h1>
-            <p class="subtitle reveal">Questions?</p>
-            <div class="rule reveal"></div>
-            <div class="meta reveal">
-                <span>Jingsheng Wang &middot; MSc Dissertation</span>
-                <span>Efficient Scheduling for Batched AI Jobs</span>
+            <h2 class="reveal">Limitations &amp; Future Work</h2>
+            <div class="two-col">
+                <div class="reveal">
+                    <h3>Current Limitations</h3>
+                    <ul>
+                        <li>When pinned memory is limited, the optimal arrangement becomes NP-hard.</li>
+                        <li>Offline batch only, no mixed online/offline priority</li>
+                    </ul>
+                </div>
+                <div class="reveal">
+                    <h3>Future Directions</h3>
+                    <ul>
+                        <li><span class="em">Multi-tenant extension</span>: global task pool merging across users with fairness guarantees</li>
+                        <li><span class="em2">Live memory telemetry</span>: Grouping tasks with similar prefixes to allow higher KV-cache hit rates</li>
+                        <li><span class="em-warm">Hybrid scheduling</span>: mix real-time and batch with priority preemption</li>
+                    </ul>
+                </div>
             </div>
         </div>
         <div class="slide-number">17</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 18: Conclusion                                          -->
+    <!-- ============================================================ -->
+    <section class="slide content-slide" id="slide-17">
+        <div class="slide-content">
+            <h2 class="reveal">Conclusion</h2>
+            <ul>
+                <li class="reveal"><span class="em">Model grouping</span> reduces switches from O(N) to O(K), eliminating redundant checkpoint loads — dominant win for heterogeneous batches</li>
+                <li class="reveal"><span class="em-warm">Checkpoint prefetch</span> overlaps SSD&rarr;CPU I/O with GPU compute via flow-shop pipelining, hiding model-switch latency between groups</li>
+                <li class="reveal"><span class="em2">Johnson's Rule</span> orders groups to maximise I/O-compute overlap, provably optimal for the two-machine flow-shop formulation</li>
+                <li class="reveal"><span class="em-green">Multi-GPU assignment</span> with greedy LPT balances model groups across 8× RTX A5000 GPUs, enabling near-linear throughput scaling</li>
+            </ul>
+            <div class="insight reveal">
+                <p>Together, these techniques make serverless batch LLM inference practical: model-switch overhead drops from a dominant cost to a marginal one, enabling high-throughput offline workloads on commodity GPU clusters.</p>
+            </div>
+        </div>
+        <div class="slide-number">18</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 19: Thank You                                           -->
+    <!-- ============================================================ -->
+    <section class="slide title-slide" id="slide-18">
+        <div class="slide-content">
+            <h1 class="reveal">Thank You</h1>
+            <div class="rule reveal"></div>
+            <div class="meta reveal">
+                <span>Jingsheng Chen</span>
+                <span>Efficient Scheduling for Batched AI Jobs</span>
+            </div>
+        </div>
+        <div class="slide-number">19</div>
     </section>
 
     <!-- ============================================================ -->

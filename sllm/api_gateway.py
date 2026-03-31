@@ -69,7 +69,6 @@ def create_app(
     Create the SLLM API Gateway FastAPI application.
     """
     
-    # Initialize Scheduler if database and router are present
     # Initialize Scheduler if database and router are present and enabled
     scheduler: Optional[BatchScheduler] = None
     if database and router:
@@ -102,11 +101,15 @@ def create_app(
         if scheduler and storage_manager:
             scheduler.set_storage_manager(storage_manager)
 
+        # Connect Scheduler to PyletClient for GPU-aware scaling
+        if scheduler and pylet_client:
+            scheduler.set_pylet_client(pylet_client)
+
         # Start router if provided
         if router:
             await router.start()
 
-        # Start Scheduler if initialized
+        # Start Scheduler if initialized (default: BatchScheduler)
         if scheduler:
             await scheduler.start()
 
@@ -114,9 +117,9 @@ def create_app(
         yield
 
         # Cleanup
-        if scheduler:
+        if scheduler and scheduler.running:
             await scheduler.stop()
-            
+
         if router:
             await router.drain(timeout=10.0)
             await router.stop()
@@ -405,8 +408,6 @@ def create_app(
 
         input_file_id = body.get("input_file_id")
         tasks = body.get("tasks")
-        completion_window = body.get("completion_window")  # e.g., "1h", "24h"
-
         if not input_file_id and not tasks:
             raise HTTPException(
                 status_code=400,
@@ -460,10 +461,8 @@ def create_app(
                 )
 
         try:
-            # Create batch job with completion_window
+            # Create batch job
             metadata = body.get("metadata", {})
-            if completion_window:
-                metadata["completion_window"] = completion_window
 
             db.create_batch_job(batch_id, metadata=metadata, input_file_id=input_file_id)
 
@@ -482,12 +481,7 @@ def create_app(
                 None, db.create_batch_tasks_bulk, task_rows, batch_id
             )
 
-            logger.info(f"Created batch job {batch_id} with {len(tasks)} tasks (completion_window: {completion_window})")
-
-            # Notify scheduler about new batch with deadline
-            scheduler: Optional[BatchScheduler] = request.app.state.scheduler
-            if scheduler and completion_window:
-                await scheduler.handle_batch_with_deadline(batch_id, len(tasks), completion_window)
+            logger.info(f"Created batch job {batch_id} with {len(tasks)} tasks")
 
             return {
                 "id": batch_id,
@@ -541,6 +535,7 @@ def create_app(
                     "id": t.id,
                     "custom_id": t.custom_id,
                     "status": t.status,
+                    "body": t.body,
                     "output": t.output,
                     "started_at": t.started_at,
                     "completed_at": t.completed_at,
@@ -811,6 +806,7 @@ def create_app(
             strategy: "sync", "chunked", or "semaphore"
             buffer_limit: Concurrency limit (default: 10)
             enable_model_grouping: Whether to sort tasks by model (default: true)
+            enable_johnsons_rule: Whether to reorder groups via Johnson's Rule (default: true)
             enable_prefetch: Whether to prefetch next model checkpoint (default: current)
             prefetch_threshold: Fraction of group done before prefetch fires (default: current)
         """
@@ -822,20 +818,25 @@ def create_app(
         strategy = body.get("strategy", "semaphore")
         buffer_limit = body.get("buffer_limit", 10)
         enable_model_grouping = body.get("enable_model_grouping", True)
-
-        # Prefetch parameters (preserve current values if not specified)
+        enable_johnsons_rule = body.get("enable_johnsons_rule", True)
         enable_prefetch = body.get("enable_prefetch", scheduler.enable_prefetch)
         prefetch_threshold = body.get("prefetch_threshold", scheduler.prefetch_threshold)
 
         try:
-            scheduler.set_strategy(strategy, buffer_limit, enable_model_grouping)
-
-            # Apply prefetch settings
+            scheduler.set_strategy(strategy, buffer_limit, enable_model_grouping, enable_johnsons_rule)
             scheduler.enable_prefetch = enable_prefetch
             scheduler.prefetch_threshold = prefetch_threshold
+
+            # Tensor parallelism config: {"model_name": tp_size, ...}
+            tp_config = body.get("tp_config")
+            if tp_config and isinstance(tp_config, dict):
+                scheduler.set_tp_config(tp_config)
+
+            if not scheduler.running:
+                await scheduler.start()
+
             logger.info(
-                f"Prefetch settings: enable={enable_prefetch}, "
-                f"threshold={prefetch_threshold}"
+                f"Scheduler: prefetch={enable_prefetch}, threshold={prefetch_threshold}, johnsons_rule={enable_johnsons_rule}"
             )
 
             return {
@@ -843,8 +844,10 @@ def create_app(
                 "strategy": strategy,
                 "buffer_limit": buffer_limit,
                 "enable_model_grouping": enable_model_grouping,
+                "enable_johnsons_rule": enable_johnsons_rule,
                 "enable_prefetch": enable_prefetch,
                 "prefetch_threshold": prefetch_threshold,
+                "tp_config": {**scheduler._auto_tp_cache, **scheduler._tp_config},
             }
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -860,8 +863,10 @@ def create_app(
             "strategy": scheduler.strategy,
             "buffer_limit": scheduler.buffer_limit,
             "enable_model_grouping": scheduler.enable_model_grouping,
+            "enable_johnsons_rule": scheduler.enable_johnsons_rule,
             "enable_prefetch": scheduler.enable_prefetch,
             "prefetch_threshold": scheduler.prefetch_threshold,
+            "tp_config": {**scheduler._auto_tp_cache, **scheduler._tp_config},
         }
 
     return app

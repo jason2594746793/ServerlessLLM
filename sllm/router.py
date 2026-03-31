@@ -57,9 +57,9 @@ logger = init_logger(__name__)
 class RouterConfig:
     """Router configuration."""
 
-    max_buffer_size: int = 10
-    cold_start_timeout: float = 180.0
-    request_timeout: float = 300.0
+    max_buffer_size: int = 100
+    cold_start_timeout: float = 600.0
+    request_timeout: float = 600.0
     retry_failed_endpoint: bool = True
 
 

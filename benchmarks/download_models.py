@@ -1,99 +1,117 @@
-# ---------------------------------------------------------------------------- #
-#  ServerlessLLM                                                               #
-#  Copyright (c) ServerlessLLM Team 2024                                       #
-#                                                                              #
-#  Licensed under the Apache License, Version 2.0 (the "License");             #
-#  you may not use this file except in compliance with the License.            #
-#                                                                              #
-#  You may obtain a copy of the License at                                     #
-#                                                                              #
-#                  http://www.apache.org/licenses/LICENSE-2.0                  #
-#                                                                              #
-#  Unless required by applicable law or agreed to in writing, software         #
-#  distributed under the License is distributed on an "AS IS" BASIS,           #
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    #
-#  See the License for the specific language governing permissions and         #
-#  limitations under the License.                                              #
-# ---------------------------------------------------------------------------- #
-import argparse
-import os
+#!/usr/bin/env python3
+"""
+Download 10-15 small models for Johnson's Rule demo
+===================================================
+Downloads a curated set of small, fast models suitable for demonstrating
+batch scheduling with Johnson's Rule.
+"""
 
-import torch
-from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import subprocess
+import sys
+from pathlib import Path
 
-from sllm_store.transformers import save_model
+# Curated list: small models, diverse families, fast downloads
+MODELS = [
+    # Qwen family (already have some, but ensure all variants)
+    'Qwen/Qwen2.5-0.5B-Instruct',
+    'Qwen/Qwen2.5-1.5B-Instruct',
+    'Qwen/Qwen2.5-3B-Instruct',
+    'Qwen/Qwen2.5-7B-Instruct',
+    'Qwen/Qwen3-0.6B',
+    'Qwen/Qwen3-8B',
 
+    # Llama 3.2 (small variants)
+    'meta-llama/Llama-3.2-1B-Instruct',
+    'meta-llama/Llama-3.2-3B-Instruct',
 
-def get_args():
-    parser = argparse.ArgumentParser(
-        description="Save a model with ServerlessLLM"
-    )
-    parser.add_argument(
-        "--model-name",
-        type=str,
-        required=True,
-        help="Name of the model to save",
-    )
-    parser.add_argument(
-        "--save-format",
-        type=str,
-        required=True,
-        choices=["sllm", "safetensors"],
-        help="Format to save the model in",
-    )
-    parser.add_argument(
-        "--save-dir",
-        type=str,
-        required=True,
-        help="Directory to save models",
-    )
-    parser.add_argument(
-        "--num-replicas",
-        type=int,
-        default=1,
-        help="Number of replicas to save",
-    )
-    return parser.parse_args()
+    # Phi family (Microsoft, very small and fast)
+    'microsoft/phi-2',
+    'microsoft/Phi-3-mini-4k-instruct',
 
+    # TinyLlama (smallest)
+    'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
+
+    # Gemma (Google, small variants)
+    'google/gemma-2b-it',
+
+    # StableLM
+    'stabilityai/stablelm-2-zephyr-1_6b',
+]
+
+STORAGE_PATH = './models_batch'
+
+def download_model(model_name: str):
+    """Download a model using huggingface-cli."""
+    print(f'\n{"="*70}')
+    print(f'Downloading: {model_name}')
+    print(f'{"="*70}')
+
+    try:
+        # Use huggingface-cli to download
+        cmd = [
+            'huggingface-cli', 'download',
+            model_name,
+            '--local-dir', f'{STORAGE_PATH}/{model_name}',
+            '--local-dir-use-symlinks', 'False',
+        ]
+
+        result = subprocess.run(cmd, check=True, capture_output=False, text=True)
+        print(f'✓ {model_name} downloaded successfully')
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print(f'✗ Failed to download {model_name}: {e}')
+        return False
+    except FileNotFoundError:
+        print('✗ huggingface-cli not found. Install with: pip install huggingface_hub[cli]')
+        return False
+
+def check_existing(model_name: str) -> bool:
+    """Check if model already exists locally."""
+    model_path = Path(STORAGE_PATH) / model_name
+    if model_path.exists() and any(model_path.iterdir()):
+        print(f'✓ {model_name} already exists, skipping')
+        return True
+    return False
 
 def main():
-    args = get_args()
+    print('='*70)
+    print('Model Download Script for Johnson\'s Rule Demo')
+    print('='*70)
+    print(f'Target: {len(MODELS)} models')
+    print(f'Storage: {STORAGE_PATH}')
+    print()
 
-    save_dir = args.save_dir
-    save_format = args.save_format
-    model_name = args.model_name
-    replicas = args.num_replicas
+    Path(STORAGE_PATH).mkdir(parents=True, exist_ok=True)
 
-    # Check if save_dir exists
-    if not os.path.exists(save_dir):
-        raise FileNotFoundError(f"Directory {save_dir} does not exist")
+    downloaded = 0
+    skipped = 0
+    failed = 0
 
-    # Load model into memory
-    print(f"Loading model {model_name} into memory")
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name, torch_dtype=torch.float16, trust_remote_code=True
-    )
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    for model in MODELS:
+        if check_existing(model):
+            skipped += 1
+            continue
 
-    # # Save model
-    if save_format == "sllm":
-        print(f"Saving {replicas} sllm models to {save_dir}")
-        for i in tqdm(range(replicas)):
-            model_dir = os.path.join(save_dir, f"{model_name}_{i}")
-            save_model(model, model_dir)
-            tokenizer.save_pretrained(model_dir)
-    elif save_format == "safetensors":
-        print(f"Saving {replicas} safetensors models to {save_dir}")
-        for i in tqdm(range(replicas)):
-            model_dir = os.path.join(save_dir, f"{model_name}_safetensors_{i}")
-            model.save_pretrained(model_dir)
-            tokenizer.save_pretrained(model_dir)
+        if download_model(model):
+            downloaded += 1
+        else:
+            failed += 1
+
+    print('\n' + '='*70)
+    print('SUMMARY')
+    print('='*70)
+    print(f'Downloaded: {downloaded}')
+    print(f'Skipped (already exists): {skipped}')
+    print(f'Failed: {failed}')
+    print(f'Total available: {downloaded + skipped}')
+    print('='*70)
+
+    if downloaded + skipped >= 3:
+        print('\n✓ Ready to run experiments')
     else:
-        raise ValueError(f"Invalid save format {save_format}")
+        print(f'\n✗ Only {downloaded + skipped} models available, need at least 3')
+        sys.exit(1)
 
-    print("Done!")
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
