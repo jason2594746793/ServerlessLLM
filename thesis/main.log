@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  30 MAR 2026 23:10
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  31 MAR 2026 06:12
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1138,16 +1138,10 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <5> not available
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <8> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 142.
 LaTeX Font Info:    Font shape `OT1/phv/m/it' in size <12> not available
-(Font)              Font shape `OT1/phv/m/sl' tried instead on input line 171.
+(Font)              Font shape `OT1/phv/m/sl' tried instead on input line 173.
 LaTeX Font Info:    Font shape `OT1/phv/m/sl' will be
-(Font)              scaled to size 10.79993pt on input line 171.
- [2]
-Overfull \hbox (0.25934pt too wide) in paragraph at lines 196--197
-[]\OT1/ptm/m/n/12 (-20) How do dif-fer-ent schedul-ing strate-gies (FIFO, Ran-d
-om, Model Group-ing, Shared-
- []
-
-[3] [4]
+(Font)              scaled to size 10.79993pt on input line 173.
+ [2] [3] [4]
 Chapter 2.
 [5
 
@@ -1157,181 +1151,206 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
  [6]
-Overfull \hbox (17.4881pt too wide) in paragraph at lines 285--285
+Overfull \hbox (17.4881pt too wide) in paragraph at lines 283--283
 []\OT1/phv/b/n/17.28 (-20) Storage Hi-er-ar-chy and Network-Attached Model Repo
 s-
  []
 
-LaTeX Font Info:    Font shape `OT1/phv/m/n' will be
-(Font)              scaled to size 8.09995pt on input line 296.
-LaTeX Font Info:    Font shape `OT1/phv/m/n' will be
-(Font)              scaled to size 6.29996pt on input line 296.
 [7]
 LaTeX Font Info:    Font shape `OT1/phv/b/n' will be
-(Font)              scaled to size 12.9599pt on input line 317.
+(Font)              scaled to size 12.9599pt on input line 295.
  [8]
 Chapter 3.
 [9
 
 ] [10]
-Overfull \hbox (13.2037pt too wide) in paragraph at lines 400--414
+Overfull \hbox (13.2037pt too wide) in paragraph at lines 378--392
  [][] 
  []
 
 [11] [12]
 Chapter 4.
-LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10.95> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 466.
+<system_arch.pdf, id=618, 617.30624pt x 346.29375pt>
+File: system_arch.pdf Graphic file (type pdf)
+<use system_arch.pdf>
+Package pdftex.def Info: system_arch.pdf  used on input line 415.
+(pdftex.def)             Requested size: 379.559pt x 212.92975pt.
 [13
 
-] [14]
-Overfull \hbox (51.1501pt too wide) in paragraph at lines 635--636
+] [14 <./system_arch.pdf>]
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10.95> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 487.
+
+Overfull \hbox (51.1501pt too wide) in paragraph at lines 557--558
  [][] 
  []
 
-[15] [16] [17] [18] [19] [20]
+[15] [16] [17] [18]
+LaTeX Font Info:    Font shape `OT1/phv/m/n' will be
+(Font)              scaled to size 8.09995pt on input line 787.
+LaTeX Font Info:    Font shape `OT1/phv/m/n' will be
+(Font)              scaled to size 6.29996pt on input line 787.
+ [19] [20]
 Chapter 5.
 [21
 
-]
-Overfull \hbox (26.87817pt too wide) in paragraph at lines 932--932
+] [22]
+Overfull \hbox (26.87817pt too wide) in paragraph at lines 871--871
 []\OT1/phv/b/n/17.28 (-20) Experiment 1: Schedul-ing Strat-egy Im-pact on Makes
 pan 
  []
 
-[22]
-<figure_exp1_strategy_bar.pdf, id=692, 403.79137pt x 302.7078pt>
+
+Overfull \hbox (1.01224pt too wide) in paragraph at lines 873--874
+\OT1/ptm/m/n/12 (-20) This experiment provides an incremental ablation of the t
+hree optimisation components---
+ []
+
+<figure_exp1_strategy_bar.pdf, id=711, 457.14502pt x 343.05678pt>
 File: figure_exp1_strategy_bar.pdf Graphic file (type pdf)
 <use figure_exp1_strategy_bar.pdf>
-Package pdftex.def Info: figure_exp1_strategy_bar.pdf  used on input line 954.
-(pdftex.def)             Requested size: 350.68274pt x 262.89636pt.
- [23 <./figure_exp1_strategy_bar.pdf>] [24]
-Overfull \hbox (37.65976pt too wide) in paragraph at lines 1079--1080
+Package pdftex.def Info: figure_exp1_strategy_bar.pdf  used on input line 891.
+(pdftex.def)             Requested size: 371.30595pt x 278.64919pt.
+[23] [24 <./figure_exp1_strategy_bar.pdf>] [25]
+Overfull \hbox (37.65976pt too wide) in paragraph at lines 1020--1021
  [][] 
  []
 
-[25]
-<figure_exp5_scalability.pdf, id=796, 483.44678pt x 296.42682pt>
+[26]
+<figure_exp5_scalability.pdf, id=826, 553.93198pt x 331.55556pt>
 File: figure_exp5_scalability.pdf Graphic file (type pdf)
 <use figure_exp5_scalability.pdf>
-Package pdftex.def Info: figure_exp5_scalability.pdf  used on input line 1108.
-(pdftex.def)             Requested size: 350.68274pt x 215.02379pt.
- [26]
-<figure_exp6_model_size.pdf, id=805, 404.90646pt x 282.70055pt>
+Package pdftex.def Info: figure_exp5_scalability.pdf  used on input line 1049.
+(pdftex.def)             Requested size: 371.30595pt x 222.25235pt.
+ [27] [28 <./figure_exp5_scalability.pdf>]
+<figure_exp6_model_size.pdf, id=927, 404.90646pt x 282.70055pt>
 File: figure_exp6_model_size.pdf Graphic file (type pdf)
 <use figure_exp6_model_size.pdf>
-Package pdftex.def Info: figure_exp6_model_size.pdf  used on input line 1146.
+Package pdftex.def Info: figure_exp6_model_size.pdf  used on input line 1094.
 (pdftex.def)             Requested size: 350.68274pt x 244.86043pt.
- [27 <./figure_exp5_scalability.pdf>] [28 <./figure_exp6_model_size.pdf>]
+ [29 <./figure_exp6_model_size.pdf>]
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1189.
+            Default family used instead on input line 1137.
  (/usr/share/texlive/texmf-dist/tex/latex/microtype/mt-cmr.cfg
 File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman 
 (RS)
 )
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1189.
+            Default family used instead on input line 1137.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1190.
+            Default family used instead on input line 1138.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1190.
+            Default family used instead on input line 1138.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1190.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1138.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7.4> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1190.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1138.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1191.
+            Default family used instead on input line 1139.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1191.
- [29]
-<figure_exp3_ordering_bar.pdf, id=998, 498.7339pt x 245.20859pt>
+            Default family used instead on input line 1139.
+ [30]
+Underfull \hbox (badness 10000) in paragraph at lines 1162--1163
+[]\OT1/ptm/m/n/10.95 (+20) Default (al-pha-bet-i-
+ []
+
+<figure_exp3_ordering_bar.pdf, id=1024, 571.00829pt x 266.46877pt>
 File: figure_exp3_ordering_bar.pdf Graphic file (type pdf)
 <use figure_exp3_ordering_bar.pdf>
-Package pdftex.def Info: figure_exp3_ordering_bar.pdf  used on input line 1223.
+Package pdftex.def Info: figure_exp3_ordering_bar.pdf  used on input line 1173.
 
-(pdftex.def)             Requested size: 350.68274pt x 172.41934pt.
+(pdftex.def)             Requested size: 350.68274pt x 163.65164pt.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1243.
+            Default family used instead on input line 1193.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1243.
+            Default family used instead on input line 1193.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1277.
+            Default family used instead on input line 1227.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 1277.
+            Default family used instead on input line 1227.
 
-Overfull \hbox (7.33029pt too wide) in paragraph at lines 1319--1320
+Overfull \hbox (7.33029pt too wide) in paragraph at lines 1269--1270
  [][] 
  []
 
-[30 <./figure_exp3_ordering_bar.pdf>] [31]
-Overfull \hbox (1.24002pt too wide) in paragraph at lines 1366--1376
+[31 <./figure_exp3_ordering_bar.pdf>] [32] [33]
+Underfull \hbox (badness 1102) in paragraph at lines 1314--1314
+[]\OT1/phv/m/n/12 (+20) Table 5.6: |Stor-age tier com-par-i-son: model load-ing
+ break-down for 8B model
+ []
+
+
+Overfull \hbox (1.24002pt too wide) in paragraph at lines 1316--1326
  [][] 
  []
 
 
-Overfull \hbox (3.26752pt too wide) in paragraph at lines 1384--1394
+Overfull \hbox (3.26752pt too wide) in paragraph at lines 1334--1344
  [][] 
  []
 
-<figure_exp5_storage_tier.pdf, id=1116, 715.0872pt x 283.91997pt>
+<figure_exp5_storage_tier.pdf, id=1169, 715.0872pt x 283.91997pt>
 File: figure_exp5_storage_tier.pdf Graphic file (type pdf)
 <use figure_exp5_storage_tier.pdf>
-Package pdftex.def Info: figure_exp5_storage_tier.pdf  used on input line 1400.
+Package pdftex.def Info: figure_exp5_storage_tier.pdf  used on input line 1350.
 
 (pdftex.def)             Requested size: 391.93546pt x 155.61925pt.
-[32] [33 <./figure_exp5_storage_tier.pdf>] [34]
+[34] [35 <./figure_exp5_storage_tier.pdf>] [36]
 Chapter 6.
-[35
+[37
 
 ]
 LaTeX Font Info:    Trying to load font information for OMS+pcr on input line 1
-453.
+403.
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/omspcr.fd
 File: omspcr.fd 
 )
 LaTeX Font Info:    Font shape `OMS/pcr/m/n' in size <12> not available
-(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 1453.
+(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 1403.
 
 
-Overfull \hbox (2.11343pt too wide) in paragraph at lines 1453--1454
+Overfull \hbox (2.11343pt too wide) in paragraph at lines 1403--1404
 []\OT1/ptm/b/n/12 (-20) Built from scratch. \OT1/ptm/m/n/12 (-20) The \OT1/pcr/
 m/n/12 BatchScheduler \OT1/ptm/m/n/12 (-20) class (\OT1/pcr/m/n/12 sllm/batch[]
 scheduler.py\OT1/ptm/m/n/12 (-20) , $\OMS/pzccm/m/n/12 ^^X$\OT1/ptm/m/n/12 (-20
 ) 1,400
  []
 
-[36] [37] [38]
+[38] [39] [40]
 Chapter 7.
-[39
-
-] [40]
-Chapter 8.
 [41
 
-] (./main.bbl [42] [43
+] [42]
+Chapter 8.
+[43
 
-] [44] [45]) [46] (./main.aux)
+] (./main.bbl [44] [45
+
+] [46] [47]) [48] (./main.aux)
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
 Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: E371A38DEE5DAEF059EEB8AE3DB44340;13251.
  ) 
 Here is how much of TeX's memory you used:
- 39385 strings out of 478287
- 876717 string characters out of 5849289
- 1291007 words of memory out of 5000000
- 56057 multiletter control sequences out of 15000+600000
- 583149 words of font info for 564 fonts, out of 8000000 for 9000
+ 39288 strings out of 478287
+ 874744 string characters out of 5849289
+ 1289262 words of memory out of 5000000
+ 55938 multiletter control sequences out of 15000+600000
+ 584367 words of font info for 577 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 84i,11n,80p,1434b,1009s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 84i,12n,80p,1434b,895s stack positions out of 5000i,500n,10000p,200000b,80000s
 {/usr/share/texmf/fonts/enc/dvips/cm-super/cm-super-ts1.enc}{/usr/share/texli
 ve/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texlive/texmf-dist/fonts/
 type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/
@@ -1347,10 +1366,10 @@ lvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvro
 re/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texm
 f-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/ty
 pe1/urw/times/utmri8a.pfb>
-Output written on main.pdf (53 pages, 475276 bytes).
+Output written on main.pdf (55 pages, 507313 bytes).
 PDF statistics:
- 1450 PDF objects out of 1728 (max. 8388607)
- 936 compressed objects within 10 object streams
- 222 named destinations out of 1000 (max. 500000)
- 153215 words of extra memory for PDF output out of 154059 (max. 10000000)
+ 1505 PDF objects out of 1728 (max. 8388607)
+ 958 compressed objects within 10 object streams
+ 223 named destinations out of 1000 (max. 500000)
+ 155268 words of extra memory for PDF output out of 184870 (max. 10000000)
 

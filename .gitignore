@@ -269,8 +269,6 @@ benchmarks/exp5_standard_workload.py
 benchmarks/exp6_32b.py
 benchmarks/exp7_stress_test.py
 
-# Build artifacts and local state
-thesis/
 ug/
 sllm_files/
 *.log
@@ -279,3 +277,7 @@ results_backup*/
 benchmarks/EXPERIMENTS_SUMMARY.md
 benchmarks/VALIDATION_REPORT.md
 example_batch_job.json
+
+# Allow everything inside thesis/
+!thesis/
+!thesis/**

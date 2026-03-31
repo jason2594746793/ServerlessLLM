@@ -1,0 +1,38 @@
+%%{init: {'themeVariables': {'edgeLabelBackground': 'transparent'}}}%%
+flowchart TD
+    User(["User / Client"])
+
+    subgraph HeadNode["Head Node"]
+        Gateway["API Gateway"]
+        Scheduler["BatchScheduler"]
+        StorageMgr["StorageManager"]
+        Router["Router"]
+    end
+
+    subgraph Workers["Worker Nodes"]
+        W1["Worker 1\n(vLLM + sllm-store)"]
+        W2["Worker 2\n(vLLM + sllm-store)"]
+        WN["Worker N\n(vLLM + sllm-store)"]
+    end
+
+    subgraph Storage["Storage"]
+        SSD[("NVMe SSD\nCheckpoints")]
+        NFS[("NFS / S3\nRemote Store")]
+    end
+
+    User -->|"batch submit"| Gateway
+    Gateway -->|"tasks"| Scheduler
+    Scheduler -->|"grouped &\nordered tasks"| Router
+    Scheduler -->|"prefetch trigger"| StorageMgr
+    Router --> W1
+    Router --> W2
+    Router --> WN
+    StorageMgr -.->|"prefetch_to_cpu"| W2
+    SSD --> W1
+    SSD --> W2
+    NFS -.-> WN
+
+    style HeadNode fill:#dbeafe,stroke:#3b82f6,stroke-width:2px
+    style Workers fill:#ffedd5,stroke:#f97316,stroke-width:2px
+    style Storage fill:#dcfce7,stroke:#22c55e,stroke-width:2px
+    style User fill:#f1f5f9,stroke:#64748b,stroke-width:2px
