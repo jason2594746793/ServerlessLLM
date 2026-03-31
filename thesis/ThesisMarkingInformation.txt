@@ -1,0 +1,34 @@
+How is my project assessed?
+The project is assessed entirely on the basis of your report (i.e., dissertation). The report is normally read independently by the project supervisor and a second member of staff (and, if there is a significant difference of opinion between markers or if either of the two markers gives a failing mark, by a moderator). It must be self-contained and include all information relevant to the project since, in general, the readers will be unaware of the work undertaken, the difficulties encountered and the results obtained. They allocate a numerical mark after assessing the project work in terms of the following criteria:
+
+Basic Criteria
+Understanding of the problem
+Completion of the project (“Completion” covers achievement of the original objectives, achievement of modified objectives, or providing convincing evidence that the objectives are unachievable.)
+Quality of the work
+Quality of the report
+Additional Criteria
+Knowledge of the literature
+Critical evaluation of previous work
+Critical evaluation of own work
+Justification of the design decisions
+Solution of any conceptual problems
+Amount of work
+Exceptional Criteria
+Evidence of originality
+Outstanding scholarship or engineering, and/or publishable research
+
+Overall format
+The report must contain no more than 40 pages (and no less than 20 pages) of content (that is, 40 pages from the start of the Introduction to the end of the Conclusion).
+
+The report should include:
+
+Title page with abstract (i.e., a one or two paragraph summary of the contents).
+Introduction and background synopsis, in which the project topic is described and set in the context of published literature, and the main results are briefly summarized (about five pages).
+A clear and concise summary of your contributions (examples: adapting a suite of existing code; interpreting a theoretical algorithm; coding; testing; conducting an experiment) preferably as a bulleted list.
+Discussion of the work undertaken, in which the various sub-problems, solutions and difficulties are examined. Discussion of any implementation should concentrate on overall principles and aspects of particular interest, rather than minute details. You should always make it clear what was completed, and what was left as future work. If in doubt spell it out: tell us which bits of code you could find already written, which bits you had to do from scratch, which bits were routine, which bits were challenging (and why).
+If appropriate, a description of experiments undertaken, a presentation of the data gleaned from them, and an interpretation of that data.
+Conclusion, in which the main achievements are reviewed, and unsolved problems and directions for further work are presented.
+Bibliography.
+In addition, the report sometimes contains appendices in which relevant program listings, circuit diagrams, check plots, formal proofs etc. are included. Such appendices do not contribute to the page count but they should not be excessively long.
+
+Excessive length, repetition and rambling explanations are discouraged. Try to write in a brief and concise but clear style. On balance, information about what you have done and choices you have made etc. is much more important than general background information.
