@@ -67,7 +67,7 @@ Large Language Model (LLM) batch workloads---model benchmarking, dataset labelli
 
 This dissertation formalises the batch scheduling problem as a two-machine flow-shop (I/O and GPU computation) and introduces three composable optimisations: (1)~\textbf{model grouping} reduces model switches from $O(n)$ to $O(k)$; (2)~\textbf{Johnson's Rule ordering} sequences model groups to maximise I/O-computation overlap; and (3)~\textbf{checkpoint prefetching} preloads the next model's weights into CPU pinned memory while the current group executes.
 
-Evaluation on NVIDIA RTX A5000 GPUs shows that model grouping reduces makespan by 99\% over FIFO (78,900s to 1,107s for a 500-task batch with 5 models). Checkpoint prefetching hides 68.7\% of model loading latency. Johnson's Rule provides 7.0--21.8\% additional makespan reduction over naive orderings. The shared-aware strategy outperforms FIFO by 49--237$\times$ across batch sizes 100--10,000 and model sizes 0.6B--32B, with advantages growing as batch size increases. Prefetching remains effective across storage tiers including 10\,GbE network storage (78.9\% latency hidden), making remote storage viable for production deployments.
+Evaluation on NVIDIA RTX A5000 GPUs shows that model grouping reduces makespan by 99\% over FIFO (78,900s to 1,107s for a 500-task batch with 5 models). Checkpoint prefetching hides 68.7\% of model loading latency. Johnson's Rule provides 7.2--22.0\% additional makespan reduction over naive orderings. The shared-aware strategy outperforms FIFO by 49--237$\times$ across batch sizes 100--10,000 and model sizes 0.6B--32B, with advantages growing as batch size increases. Prefetching remains effective across storage tiers including 10\,GbE network storage (78.9\% latency hidden), making remote storage viable for production deployments.
 }
 
 \maketitle
@@ -129,23 +129,28 @@ The three components compose into a complete pipeline: grouping reduces switches
     loadbar/.style={bar, fill=cgray, text=black},
     label/.style={font=\small, anchor=east},
 ]
-% FIFO
+% FIFO  (bars drawn as rectangles to avoid coordinate/minimum-width gap)
 \node[label] at (-2, 1.5) {\textbf{FIFO}};
-\node[loadbar, minimum width=14] at (0, 1.5) {};
-\node[modela, minimum width=4] at (14, 1.5) {A};
-\node[loadbar, minimum width=14] at (18, 1.5) {};
-\node[modelb, minimum width=4] at (32, 1.5) {B};
-\node[loadbar, minimum width=14] at (36, 1.5) {};
-\node[modela, minimum width=4] at (50, 1.5) {A};
+\draw[fill=cgray]   (0,  1.225) rectangle (14, 1.775);
+\draw[fill=cblue]   (14, 1.225) rectangle (18, 1.775);
+\node[font=\tiny, text=white] at (16, 1.5) {A};
+\draw[fill=cgray]   (18, 1.225) rectangle (32, 1.775);
+\draw[fill=corange] (32, 1.225) rectangle (36, 1.775);
+\node[font=\tiny, text=white] at (34, 1.5) {B};
+\draw[fill=cgray]   (36, 1.225) rectangle (50, 1.775);
+\draw[fill=cblue]   (50, 1.225) rectangle (54, 1.775);
+\node[font=\tiny, text=white] at (52, 1.5) {A};
 \node[font=\tiny] at (58, 1.5) {$\cdots$};
 \draw[{Stealth[length=1.5mm]}-{Stealth[length=1.5mm]}] (0, 0.8) -- (62, 0.8);
 \node[font=\scriptsize] at (31, 0.45) {$\approx$1120s (96\% loading)};
 % Grouped
 \node[label] at (-2, -0.3) {\textbf{Grouped}};
-\node[loadbar, minimum width=14] at (0, -0.3) {};
-\node[modela, minimum width=10] at (14, -0.3) {A$\times$10};
-\node[loadbar, minimum width=14] at (24, -0.3) {};
-\node[modelb, minimum width=10] at (38, -0.3) {B$\times$10};
+\draw[fill=cgray]   (0,  -0.575) rectangle (14, -0.025);
+\draw[fill=cblue]   (14, -0.575) rectangle (24, -0.025);
+\node[font=\tiny, text=white] at (19, -0.3) {A$\times$10};
+\draw[fill=cgray]   (24, -0.575) rectangle (38, -0.025);
+\draw[fill=corange] (38, -0.575) rectangle (48, -0.025);
+\node[font=\tiny, text=white] at (43, -0.3) {B$\times$10};
 \draw[{Stealth[length=1.5mm]}-{Stealth[length=1.5mm]}] (0, -1.1) -- (48, -1.1);
 \node[font=\scriptsize] at (24, -1.45) {$\approx$147s (87\% reduction)};
 \end{tikzpicture}
@@ -406,14 +411,96 @@ This chapter presents the design of the shared-aware scheduling system. We focus
 
 \section{System Architecture Overview}
 
-The system extends ServerlessLLM's head node with three new components: the \textbf{BatchScheduler} (model grouping and Johnson's Rule ordering), the \textbf{StorageManager} (checkpoint prefetching into sllm-store's pinned memory pool), and a batch-aware \textbf{AutoScaler} integration. These operate at the cluster scheduler level without modifying the inference engine. The data flow is: (1)~the user submits a batch via the API Gateway; (2)~the BatchScheduler groups tasks by model, applies Johnson's Rule, and feeds them to the Router; (3)~the Router dispatches tasks to vLLM workers; (4)~the StorageManager prefetches the next model's weights while the current group executes; (5)~the AutoScaler adjusts instance count based on batch demand.
+The system extends ServerlessLLM's head node with three new components: the \textbf{BatchScheduler} (model grouping and Johnson's Rule ordering), the \textbf{StorageManager} (checkpoint prefetching into sllm-store's pinned memory pool), and a batch-aware \textbf{AutoScaler} integration. These operate at the cluster scheduler level without modifying the inference engine. A \textbf{SQLite database} (\texttt{state.db}) on the head node serves as the shared state store: the BatchScheduler persists batch jobs, task status, and deployment configuration; the Router reads healthy worker endpoints from the same database to route requests. The data flow is: (1)~the user submits a batch via the API Gateway; (2)~the BatchScheduler groups tasks by model, applies Johnson's Rule, persists job state to the database, and feeds ordered tasks to the Router; (3)~the Router queries the database for healthy endpoints and dispatches tasks to vLLM workers; (4)~the StorageManager prefetches the next model's weights while the current group executes; (5)~the AutoScaler adjusts instance count based on batch demand.
 
 Figure~\ref{fig:system_arch} illustrates the system architecture.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{system_arch.pdf}
-\caption{System architecture. The BatchScheduler on the head node groups tasks by model and applies Johnson's Rule ordering. The StorageManager triggers asynchronous checkpoint prefetching to worker nodes. Workers run vLLM with sllm-store for pinned memory management.}
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners=5pt, minimum width=3.0cm, minimum height=1.0cm,
+                font=\small, align=center, thick},
+    headbox/.style={box, fill=cbluelight},
+    workerbox/.style={box, fill=corangelight},
+    storagebox/.style={box, fill=cgreenlight},
+    dbbox/.style={box, fill=cbluelight!50, draw=cblue!70!black},
+    arr/.style={-{Stealth[length=5pt]}, thick},
+    region/.style={draw, dashed, rounded corners=10pt, inner sep=14pt, thick},
+]
+
+% User / Client
+\node[box, fill=cgraylight] (user) {User / Client};
+
+% Head Node — gateway centred at top; 2×2 grid below
+\node[headbox, below=1.4cm of user] (gateway) {API Gateway};
+
+% Row 2: scheduler (left) and storage_mgr (right), symmetric about x=0
+\node[headbox, below=1.1cm of gateway, xshift=-2.5cm] (scheduler) {BatchScheduler};
+\node[headbox, right=2.0cm of scheduler]              (storage_mgr) {StorageManager};
+
+% Row 3: router under scheduler, db under storage_mgr
+\node[headbox, below=1.1cm of scheduler] (router) {Router};
+\node[dbbox,   below=1.1cm of storage_mgr] (db) {SQLite DB\\{\scriptsize state.db}};
+
+% Head node background
+\begin{scope}[on background layer]
+\node[region, fill=cbluelight!30, fit=(gateway)(scheduler)(storage_mgr)(router)(db),
+      label={[font=\small\bfseries]above left:Head Node}] (headregion) {};
+\end{scope}
+
+% Worker nodes
+\node[workerbox, below left=1.6cm and 0.6cm of router] (w1) {Worker 1\\{\scriptsize vLLM + sllm-store}};
+\node[workerbox, below=1.6cm of router, xshift=2.2cm]  (w2) {Worker 2\\{\scriptsize vLLM + sllm-store}};
+\node[workerbox, below right=1.6cm and 0.2cm of db]    (wn) {Worker $N$\\{\scriptsize vLLM + sllm-store}};
+
+% Worker region background
+\begin{scope}[on background layer]
+\node[region, fill=corangelight!30, fit=(w1)(w2)(wn),
+      label={[font=\small\bfseries]above left:Worker Nodes}] (workerregion) {};
+\end{scope}
+
+% Storage
+\node[storagebox, below=1.2cm of w2] (ssd) {NVMe SSD\\{\scriptsize Checkpoints}};
+\node[storagebox, right=1.4cm of ssd] (nfs) {NFS / S3\\{\scriptsize Remote Store}};
+
+% ── Arrows ──
+
+% Request path
+\draw[arr] (user)      -- node[right, font=\scriptsize] {batch submit} (gateway);
+\draw[arr] (gateway)   -- node[left,  font=\scriptsize] {tasks} (scheduler);
+
+% Scheduler → StorageManager (prefetch trigger)
+\draw[arr, corange] (scheduler) -- node[above, font=\scriptsize] {prefetch trigger} (storage_mgr);
+
+% Scheduler → Router (ordered tasks)
+\draw[arr] (scheduler) -- node[left, font=\scriptsize, align=right] {grouped \&\\ordered tasks} (router);
+
+% Scheduler → DB (diagonal through centre of head node — clear of all boxes)
+\draw[arr, cblue!60!black, dashed]
+    (scheduler.east) to[out=-15, in=160]
+    node[midway, below, font=\scriptsize] {job state} (db.west);
+
+% DB → Router (horizontal, same row)
+\draw[arr, cblue!60!black]
+    (db.west) -- node[below, font=\scriptsize] {endpoints} (router.east);
+
+% StorageManager → Worker N (prefetch_to_cpu): straight down then right
+\draw[arr, corange!80!black, dashed, line width=1.2pt]
+    (storage_mgr.south) -- ++(0, -0.6)
+    -| node[pos=0.25, above, font=\scriptsize] {\texttt{prefetch\_to\_cpu}} (wn.north);
+
+% Router → Workers
+\draw[arr] (router) -- (w1.north);
+\draw[arr] (router) -- (w2.north);
+\draw[arr] (router) -- (wn.north);
+
+% Storage → Workers
+\draw[arr, cgreen]        (ssd.north) -- (w1.south);
+\draw[arr, cgreen]        (ssd.north) -- (w2.south);
+\draw[arr, cgreen, dashed] (nfs.north) -- (wn.south);
+
+\end{tikzpicture}
+\caption{System architecture. The BatchScheduler groups tasks by model, applies Johnson's Rule ordering, and persists job state to a SQLite database. The Router queries the same database for healthy worker endpoints. The StorageManager triggers asynchronous checkpoint prefetching (\texttt{prefetch\_to\_cpu}) to worker nodes ahead of execution. Workers run vLLM with sllm-store for pinned-memory checkpoint management.}
 \label{fig:system_arch}
 \end{figure}
 
@@ -594,162 +681,8 @@ The overall scheduling pipeline is illustrated in Figure~\ref{fig:scheduling_flo
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[
-    node distance=0.4cm,
-    >=Stealth,
-    % Styles
-    task/.style={minimum width=0.38cm, minimum height=0.45cm, font=\tiny,
-                 inner sep=0pt, draw=black!30, line width=0.3pt},
-    grpbox/.style={draw, rounded corners=2pt, minimum height=0.7cm,
-                   font=\scriptsize, align=center, thick, inner sep=4pt},
-    gpulabel/.style={font=\scriptsize\bfseries, anchor=east},
-    gpubar/.style={minimum height=0.55cm, anchor=west, font=\tiny,
-                   draw=black!40, line width=0.3pt, inner sep=2pt},
-    phase/.style={font=\scriptsize\bfseries, fill=white, inner sep=2pt},
-    arr/.style={->, thick, draw=cgray!80},
-    prefarr/.style={->, thick, draw=camber, dashed},
-]
-
-% ══════════════════════════════════════════════════════════════
-% STAGE 1: Input batch (interleaved)
-% ══════════════════════════════════════════════════════════════
-\node[font=\scriptsize\bfseries, anchor=west] at (-0.5, 6.8) {Input Batch $B$: 1006 tasks, 4 models};
-
-% Interleaved task boxes
-\foreach \i/\c/\l in {
-    0/cblue/A, 1/corange/B, 2/cblue/A, 3/cpurple/D, 4/cgreen/C,
-    5/cblue/A, 6/corange/B, 7/cpurple/D, 8/cblue/A, 9/cgreen/C,
-    10/cblue/A, 11/corange/B, 12/cblue/A, 13/cgreen/C, 14/cblue/A,
-    15/cpurple/D, 16/cgreen/C, 17/cblue/A, 18/corange/B, 19/cblue/A} {
-    \node[task, fill=\c!25] at (\i*0.44+0.2, 6.3) {\l};
-}
-\node[font=\scriptsize] at (9.3, 6.3) {$\cdots$};
-
-% ══════════════════════════════════════════════════════════════
-% PHASE 1 arrow
-% ══════════════════════════════════════════════════════════════
-\draw[arr] (4.4, 5.9) -- (4.4, 5.5)
-    node[midway, right=2pt, phase] {Phase 1: Group by model};
-
-% ══════════════════════════════════════════════════════════════
-% STAGE 2: Model groups (unordered)
-% ══════════════════════════════════════════════════════════════
-\node[grpbox, fill=cblue!15, minimum width=2.8cm] (ga) at (1.6, 5.0)
-    {Model A (8B)\\500 tasks, TP=1};
-\node[grpbox, fill=corange!15, minimum width=1.8cm] (gb) at (4.3, 5.0)
-    {Model B (0.6B)\\200 tasks, TP=1};
-\node[grpbox, fill=cgreen!15, minimum width=2.0cm] (gc) at (6.6, 5.0)
-    {Model C (3B)\\300 tasks, TP=1};
-\node[grpbox, fill=cpurple!15, minimum width=1.5cm] (gd) at (8.8, 5.0)
-    {Model D (70B)\\6 tasks, TP=2};
-
-% ══════════════════════════════════════════════════════════════
-% PHASE 2 arrow
-% ══════════════════════════════════════════════════════════════
-\draw[arr] (4.4, 4.3) -- (4.4, 3.9)
-    node[midway, right=2pt, phase] {Phase 2: Johnson's Rule ($a_i \leq b_i$ first)};
-
-% ══════════════════════════════════════════════════════════════
-% STAGE 3: Johnson's Rule ordered sequence
-% ══════════════════════════════════════════════════════════════
-\node[grpbox, fill=corange!20, minimum width=1.4cm] (jb) at (1.0, 3.4)
-    {B (0.6B)\\{\tiny $a$=0.4s, $b$=60s}};
-\node[grpbox, fill=cgreen!20, minimum width=1.6cm] (jc) at (3.1, 3.4)
-    {C (3B)\\{\tiny $a$=2.0s, $b$=90s}};
-\node[grpbox, fill=cblue!20, minimum width=2.0cm] (ja) at (5.5, 3.4)
-    {A (8B)\\{\tiny $a$=5.1s, $b$=150s}};
-\node[grpbox, fill=cpurple!20, minimum width=1.5cm] (jd) at (7.8, 3.4)
-    {D (70B)\\{\tiny $a$=23s, $b$=7.2s}};
-% Arrows between groups showing order
-\draw[->, thick, cgray] (jb) -- (jc);
-\draw[->, thick, cgray] (jc) -- (ja);
-\draw[->, thick, cgray] (ja) -- (jd);
-
-% Label: compute-heavy → I/O-heavy
-\draw[decorate, decoration={brace, amplitude=3pt}, thick, cgreen!70]
-    (0.2, 2.85) -- (6.6, 2.85)
-    node[midway, below=4pt, font=\tiny, cgreen!80] {$S_1$: compute-heavy ($a_i \leq b_i$), sorted by $a_i$ asc};
-\draw[decorate, decoration={brace, amplitude=3pt}, thick, cpurple!70]
-    (7.0, 2.85) -- (8.8, 2.85)
-    node[midway, below=4pt, font=\tiny, cpurple!80] {$S_2$: I/O-heavy};
-
-% ══════════════════════════════════════════════════════════════
-% PHASE 3 arrow
-% ══════════════════════════════════════════════════════════════
-\draw[arr] (4.4, 2.4) -- (4.4, 2.0)
-    node[midway, right=2pt, phase] {Phase 3: GPU allocation (6 GPUs)};
-
-% ══════════════════════════════════════════════════════════════
-% STAGE 4: GPU allocation — the key diagram
-% ══════════════════════════════════════════════════════════════
-
-% --- TP Lane: GPU 0+1 paired for Model D (70B, TP=2) ---
-\node[gpulabel] at (-0.2, 1.4) {GPU 0};
-\node[gpulabel] at (-0.2, 0.8) {GPU 1};
-
-% TP bracket
-\draw[decorate, decoration={brace, amplitude=4pt, mirror}, thick, cpurple!70]
-    (-0.1, 0.55) -- (-0.1, 1.65)
-    node[midway, left=5pt, font=\tiny, cpurple, rotate=90, anchor=south] {TP=2};
-
-% TP model bar spanning both GPUs
-\node[gpubar, fill=cpurple!20, minimum width=1.8cm, minimum height=1.15cm]
-    at (0.1, 0.78) {};
-\node[font=\tiny, cpurple!80] at (1.0, 1.2) {Model D shard 0};
-\node[font=\tiny, cpurple!80] at (1.0, 0.85) {Model D shard 1};
-\node[font=\tiny] at (1.0, 0.55) {6 tasks};
-
-% Idle remainder for TP lane
-\node[gpubar, fill=cgraylight, minimum width=6.5cm, minimum height=1.15cm,
-      draw=cgray!30, dashed] at (2.0, 0.78) {};
-\node[font=\tiny, cgray] at (5.2, 1.05) {idle (TP lane finishes early)};
-
-% --- Single-GPU Lanes ---
-
-% GPU 2: B → C(150) → A-replica1(250)
-\node[gpulabel] at (-0.2, -0.0) {GPU 2};
-\node[gpubar, fill=corange!25, minimum width=1.0cm] at (0.1, 0.0) {B};
-\node[font=\tiny, corange!80] at (0.6, -0.35) {200 tasks};
-\node[gpubar, fill=cgreen!25, minimum width=1.5cm] at (1.2, 0.0) {C};
-\node[font=\tiny, cgreen!80] at (1.95, -0.35) {150 tasks};
-\node[gpubar, fill=cblue!25, minimum width=3.2cm] at (2.8, 0.0) {A (replica 1)};
-\node[font=\tiny, cblue!80] at (4.4, -0.35) {250 tasks};
-
-% GPU 3: C(150) → A-replica2(250)
-\node[gpulabel] at (-0.2, -0.8) {GPU 3};
-\node[gpubar, fill=cgreen!25, minimum width=2.0cm] at (0.1, -0.8) {C};
-\node[font=\tiny, cgreen!80] at (1.1, -1.15) {150 tasks};
-\node[gpubar, fill=cblue!25, minimum width=3.6cm] at (2.2, -0.8) {A (replica 2)};
-\node[font=\tiny, cblue!80] at (4.0, -1.15) {250 tasks};
-
-% Prefetch arrows
-\draw[prefarr] (1.1, 0.22) -- (1.3, 0.22)
-    node[above, font=\tiny, camber] {pf};
-\draw[prefarr] (2.6, 0.22) -- (2.9, 0.22)
-    node[above, font=\tiny, camber] {pf};
-\draw[prefarr] (2.0, -0.58) -- (2.3, -0.58)
-    node[above, font=\tiny, camber] {pf};
-
-% Replica bracket for Model A
-\draw[decorate, decoration={brace, amplitude=4pt}, thick, cblue!70]
-    (8.6, 0.3) -- (8.6, -1.1)
-    node[midway, right=5pt, font=\tiny, cblue, align=left] {Model A\\split across\\2 replicas};
-
-% Region backgrounds
-\begin{scope}[on background layer]
-% TP lane background
-\fill[cpurplelight!30, rounded corners=3pt] (-0.4, 0.45) rectangle (8.5, 1.7);
-\node[font=\tiny\bfseries, cpurple!60, anchor=north east] at (8.4, 1.68) {TP Lane};
-% Single-GPU lane background
-\fill[cbluelight!20, rounded corners=3pt] (-0.4, -1.35) rectangle (8.5, 0.35);
-\node[font=\tiny\bfseries, cblue!60, anchor=north east] at (8.4, 0.33) {Single-GPU Lanes};
-\end{scope}
-
-% Time axis
-\draw[->, thick] (0.0, -1.6) -- (8.5, -1.6) node[right, font=\tiny] {Time};
-
-\end{tikzpicture}
-\caption{End-to-end scheduling example for a 1006-task batch with 4 models on 6 GPUs. \textbf{Phase~1} groups tasks by model. \textbf{Phase~2} applies Johnson's Rule: compute-heavy groups ($a_i \leq b_i$) are scheduled first to maximise prefetch overlap. \textbf{Phase~3} allocates groups to GPUs: Model~D (70B, TP=2) occupies a dedicated 2-GPU tensor parallelism lane; Model~A (500 tasks) is split across 2 single-GPU replicas for throughput; Models~B and~C are assigned via greedy LPT with per-GPU Johnson's Rule ordering. Dashed arrows (pf) indicate checkpoint prefetch triggers.}
+\includegraphics[width=\textwidth]{scheduling_flow.pdf}
+\caption{End-to-end scheduling example for a 1006-task batch with 4 models on 6 GPUs. \textbf{Phase~1} groups tasks by model. \textbf{Phase~2} applies Johnson's Rule: compute-heavy groups ($a_i \leq b_i$) are scheduled first to maximise prefetch overlap. \textbf{Phase~3} allocates groups to GPUs: Model~D (70B, TP=2) occupies a dedicated 2-GPU tensor parallelism lane; Models~A (500 tasks) and~C (300 tasks) are each split across 2 single-GPU replicas by LPT rebalancing (the lane imbalance exceeds the full model-switch cost: NVMe read $+$ PCIe DMA $+$ vLLM init $\approx$38\,s); Model~B's smaller task count does not meet this threshold and remains on a single GPU. Per-GPU Johnson's Rule ordering is applied within each lane. Dashed arrows (pf) indicate checkpoint prefetch triggers.}
 \label{fig:scheduling_flow}
 \end{figure}
 
@@ -966,42 +899,42 @@ With Prefetch & 228.7 $\pm$ 3.4 & 32.6 $\pm$ 1.1 & 68.7\% \\
 ]
 
 % --- No Prefetch (top) ---
-\node[lbl] at (-5, 2.3) {No Prefetch};
-\node[lbl] at (-5, 1.7) {\scriptsize (312.4s)};
+\node[lbl] at (-13, 2.3) {No Prefetch};
+\node[lbl] at (-13, 1.7) {\scriptsize (312.4s)};
 
 % GPU row
 \node[font=\scriptsize, anchor=east] at (-2, 2.5) {GPU};
 \draw[fill=cblue] (0, 2.25) rectangle (100, 2.75);   % Model A compute
-\node[bar, white] at (20, 2.25) {Model A (100s)};
+\node[bar, white] at (20, 2.5) {Model A (100s)};
 % idle gap
 \draw[fill=cgray!40, pattern=north east lines, pattern color=cgray] (100, 2.25) rectangle (204, 2.75);
-\node[bar] at (120, 2.25) {idle (104s)};
+\node[bar] at (120, 2.5) {idle (104s)};
 \draw[fill=cblue] (204, 2.25) rectangle (312, 2.75);  % Model B compute
-\node[bar, white] at (220, 2.25) {Model B (108s)};
+\node[bar, white] at (220, 2.5) {Model B (108s)};
 
 % I/O row
 \node[font=\scriptsize, anchor=east] at (-2, 1.75) {I/O};
 \draw[fill=corange] (100, 1.5) rectangle (204, 2.0);  % Load Model B
-\node[bar, white] at (115, 1.5) {Load B (104s)};
+\node[bar, white] at (115, 1.75) {Load B (104s)};
 
 % --- With Prefetch (bottom) ---
-\node[lbl] at (-5, 0.5) {Prefetch};
-\node[lbl] at (-5, -0.1) {\scriptsize (228.7s)};
+\node[lbl] at (-13, 0.5) {Prefetch};
+\node[lbl] at (-13, -0.1) {\scriptsize (228.7s)};
 
 % GPU row
 \node[font=\scriptsize, anchor=east] at (-2, 0.75) {GPU};
 \draw[fill=cblue] (0, 0.5) rectangle (100, 1.0);   % Model A compute
-\node[bar, white] at (20, 0.5) {Model A (100s)};
+\node[bar, white] at (20, 0.75) {Model A (100s)};
 % short transition
 \draw[fill=cgray!40, pattern=north east lines, pattern color=cgray] (100, 0.5) rectangle (133, 1.0);
-\node[bar] at (103, 0.5) {\tiny 33s};
+\node[bar] at (103, 0.75) {\tiny 33s};
 \draw[fill=cblue] (133, 0.5) rectangle (229, 1.0);  % Model B compute
-\node[bar, white] at (145, 0.5) {Model B (96s)};
+\node[bar, white] at (145, 0.75) {Model B (96s)};
 
 % I/O row - prefetch overlaps with Model A compute
 \node[font=\scriptsize, anchor=east] at (-2, 0.0) {I/O};
 \draw[fill=camber] (0, -0.25) rectangle (104, 0.25);  % Prefetch B (overlapped)
-\node[bar] at (10, -0.25) {Prefetch B (104s)};
+\node[bar] at (10, 0.0) {Prefetch B (104s)};
 
 % Overlap brace
 \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (0, -0.4) -- (100, -0.4)
@@ -1193,24 +1126,24 @@ Figure~\ref{fig:exp3_ordering_bar} compares makespan across all six permutations
 \node[label] at (-1.2, 2.0) {\textbf{(32B\textrightarrow8B\textrightarrow0.6B)}};
 
 % Group 1: 32B (load 21.7s first — GPU idle, no overlap possible)
-\node[load, minimum width=21.7] at (0, 2.2) {};
+\draw[fill=cred]   (0,    1.85) rectangle (21.7, 2.55);
 \node[font=\scriptsize, text=white] at (10.8, 2.2) {Load 32B};
-\node[compute, minimum width=36] at (21.7, 2.2) {};
+\draw[fill=cblue]  (21.7, 1.85) rectangle (57.7, 2.55);
 \node[font=\scriptsize, text=white] at (39.7, 2.2) {32B compute};
 
 % Prefetch 8B during 32B compute (5.1s << 36s, fully hidden)
-\node[prefetch, minimum width=5.1] at (21.7, 1.4) {};
+\draw[fill=camber, pattern=north east lines, pattern color=camber!70] (21.7, 1.05) rectangle (26.8, 1.75);
 \node[font=\scriptsize] at (24.3, 1.4) {pf 8B};
 
 % Group 2: 8B (no residual, compute 15s)
-\node[compute, minimum width=15] at (57.7, 2.2) {};
+\draw[fill=cblue]  (57.7, 1.85) rectangle (72.7, 2.55);
 \node[font=\scriptsize, text=white] at (65.2, 2.2) {8B};
 
 % Prefetch 0.6B during 8B compute (0.4s, trivial)
-\node[prefetch, minimum width=0.8] at (57.7, 1.4) {};
+\draw[fill=camber, pattern=north east lines, pattern color=camber!70] (57.7, 1.05) rectangle (58.5, 1.75);
 
 % Group 3: 0.6B (no residual, compute 9s)
-\node[compute, minimum width=9] at (72.7, 2.2) {};
+\draw[fill=cblue]  (72.7, 1.85) rectangle (81.7, 2.55);
 \node[font=\scriptsize, text=white] at (77.2, 2.2) {0.6B};
 
 % Idle annotation: big load at start with no overlap
@@ -1227,30 +1160,30 @@ Figure~\ref{fig:exp3_ordering_bar} compares makespan across all six permutations
 \node[label] at (-1.2, -1.5) {\textbf{(0.6B\textrightarrow8B\textrightarrow32B)}};
 
 % Group 1: 0.6B (tiny load 0.4s, compute 9s)
-\node[load, minimum width=0.4] at (0, -1.3) {};
-\node[compute, minimum width=9] at (0.4, -1.3) {};
+\draw[fill=cred]   (0,   -1.65) rectangle (0.4, -0.95);
+\draw[fill=cblue]  (0.4, -1.65) rectangle (9.4, -0.95);
 \node[font=\scriptsize, text=white] at (5, -1.3) {0.6B};
 
 % Prefetch 8B during 0.6B compute (5.1s << 9s, fully hidden)
-\node[prefetch, minimum width=5.1] at (0.4, -2.1) {};
+\draw[fill=camber, pattern=north east lines, pattern color=camber!70] (0.4, -2.45) rectangle (5.5, -1.75);
 \node[font=\scriptsize] at (3.0, -2.1) {pf 8B};
 
 % Group 2: 8B (no residual, compute 15s)
-\node[compute, minimum width=15] at (9.4, -1.3) {};
+\draw[fill=cblue]  (9.4, -1.65) rectangle (24.4, -0.95);
 \node[font=\scriptsize, text=white] at (17, -1.3) {8B};
 
 % Prefetch 32B during 8B compute (15s of 21.7s covered)
-\node[prefetch, minimum width=15] at (9.4, -2.1) {};
+\draw[fill=camber, pattern=north east lines, pattern color=camber!70] (9.4, -2.45) rectangle (24.4, -1.75);
 \node[font=\scriptsize] at (17, -2.1) {pf 32B (15/21.7s)};
 
 % Group 3: 32B (residual load 6.7s, then compute 36s)
-\node[load, minimum width=6.7] at (24.4, -1.3) {};
-\node[extlbl, text=cred!80] at (31.5, -1.3) {res};
-\node[compute, minimum width=36] at (31.1, -1.3) {};
+\draw[fill=cred]   (24.4, -1.65) rectangle (31.1, -0.95);
+\node[font=\scriptsize, text=cred!80] at (27.75, -1.3) {res};
+\draw[fill=cblue]  (31.1, -1.65) rectangle (67.1, -0.95);
 \node[font=\scriptsize, text=white] at (49, -1.3) {32B compute};
 
 % Overlap annotation
-\draw[decorate, decoration={brace, amplitude=5pt}, thick, cgreen!70]
+\draw[decorate, decoration={brace, mirror, amplitude=5pt}, thick, cgreen!70]
     (0.4, -2.5) -- (24.4, -2.5)
     node[midway, below=6pt, font=\scriptsize, cgreen!80] {Prefetch overlap maximised};
 
@@ -1356,20 +1289,20 @@ Figure~\ref{fig:exp5_storage_tier} visualises the loading time breakdown and end
 
 \textbf{Prefetching is most valuable for mid-bandwidth storage.} For high-bandwidth tiers (RAID-0, 100\,GbE), loading time is already short ($\sim$2\,s), leaving minimal room for prefetching (3.7--4.0\% reduction). The largest absolute benefit is for 10\,GbE NFS (12.8s read time), where prefetching saves 10.1\,s (23.1\% reduction).
 
-\textbf{PCIe DMA is the universal lower bound.} Regardless of storage tier, the GPU memory transfer (0.9s via PCIe Gen4 x16) is irreducible. Even with perfect prefetching, model transitions cannot be faster than $\sim$1\,s (Figure~\ref{fig:exp5_storage_tier}a).
+\textbf{PCIe DMA sets the I/O transfer lower bound.} Regardless of storage tier, the GPU memory transfer (0.9\,s via PCIe Gen4 x16) is irreducible, so the pure I/O component of a model transition cannot be shorter than $\sim$1\,s (Figure~\ref{fig:exp5_storage_tier}a). Note that this I/O lower bound is distinct from the practical transition lower bound: Experiment~2 measures a 32.6\,s residual after prefetching, which includes GPU memory allocation and vLLM engine initialisation ($\sim$32\,s) that cannot be overlapped with computation regardless of storage tier. Experiment~5 isolates the I/O component only; the vLLM initialisation overhead is constant across all storage tiers.
 
 \textbf{Network storage and fault tolerance.} While 10\,GbE NFS adds 7.7s of read latency compared to single NVMe, it provides critical fault tolerance through built-in replication. Prefetching compensates for most of this additional latency (78.9\% hidden), reducing the practical penalty to 2.7s of residual wait --- an acceptable trade-off for the unlimited capacity and replication benefits of remote storage.
 
 
 \section{Evaluation Summary}
 
-The three optimisations are complementary and compose multiplicatively: model grouping provides first-order benefit (99\% makespan reduction, 71$\times$ speedup), checkpoint prefetching provides second-order benefit (additional 1.6$\times$, hiding 68.7\% of I/O latency), and Johnson's Rule provides third-order benefit (additional 1.2$\times$, 7.2--22.0\% over naive orderings). For a production workload with 10,000 tasks across 5 models, the combined effect transforms an 18-day FIFO execution into a 2-hour batch completion (237$\times$ speedup).
+The three optimisations are complementary and compose multiplicatively: model grouping provides first-order benefit (99\% makespan reduction, 71$\times$ speedup), checkpoint prefetching provides second-order benefit (additional 1.6$\times$, hiding 68.7\% of total cold-switch latency on local SSD, Experiment~2; hiding 78.9\% of the I/O read time on 10\,GbE NFS, Experiment~5), and Johnson's Rule provides third-order benefit (additional 1.2$\times$, 7.2--22.0\% over naive orderings). For a production workload with 10,000 tasks across 5 models, the combined effect transforms an 18-day FIFO execution into a 2-hour batch completion (237$\times$ speedup).
 
 Compared to industrial batch APIs (OpenAI Batch, AWS Bedrock), our system's key advantage is multi-model batch support with shared-structure-aware scheduling. Industrial systems are single-model only and do not expose scheduling policies, though they offer superior scale and reliability.
 
 \section{Summary}
 
-The experimental evaluation demonstrates three levels of compounding optimisation. Model grouping provides first-order benefit (99\% makespan reduction over FIFO, 71$\times$ speedup), checkpoint prefetching provides second-order benefit (68.7\% latency hiding from local SSD, 78.9\% from network storage), and Johnson's Rule ordering provides third-order benefit (7.2--22.0\% improvement over naive orderings, robust to inference time uncertainty). The shared-aware strategy outperforms FIFO by 49--237$\times$ across production batch sizes of 100--10,000 tasks, with advantages growing towards an asymptotic limit of 247$\times$. The system remains effective with network-attached replicated storage, making it viable for production deployments where fault tolerance is critical.
+The experimental evaluation demonstrates three levels of compounding optimisation. Model grouping provides first-order benefit (99\% makespan reduction over FIFO, 71$\times$ speedup), checkpoint prefetching provides second-order benefit (hiding 68.7\% of total cold-switch latency on local SSD, Experiment~2; hiding 78.9\% of the I/O read time on 10\,GbE NFS, Experiment~5), and Johnson's Rule ordering provides third-order benefit (7.2--22.0\% improvement over naive orderings, robust to inference time uncertainty). The shared-aware strategy outperforms FIFO by 49--237$\times$ across production batch sizes of 100--10,000 tasks, with advantages growing towards an asymptotic limit of 247$\times$. The system remains effective with network-attached replicated storage, making it viable for production deployments where fault tolerance is critical.
 
 
 % ============================================================================
@@ -1388,11 +1321,11 @@ Model grouping effectively discovers and exploits the dominant shared structure 
 
 \paragraph{RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}
 
-Yes. The batch scheduling problem maps naturally to a two-machine flow-shop where Machine~A is I/O (loading model weights) and Machine~B is GPU computation. Johnson's Rule determines the optimal model group ordering to maximise overlap between loading and execution. Checkpoint prefetching implements this overlap, hiding 68.7\% of model loading latency (Experiment~2). Experiment~3 validates that Johnson's Rule outperforms naive orderings by 7.0--21.8\%, with the largest gains occurring when the default alphabetical ordering happens to place I/O-heavy models first. The combination of Johnson's Rule ordering with prefetching is more effective than naive ordering because compute-heavy groups are scheduled first, providing a longer overlap window for prefetching the next model.
+Yes. The batch scheduling problem maps naturally to a two-machine flow-shop where Machine~A is I/O (loading model weights) and Machine~B is GPU computation. Johnson's Rule determines the optimal model group ordering to maximise overlap between loading and execution. Checkpoint prefetching implements this overlap, hiding 68.7\% of model loading latency (Experiment~2). Experiment~3 validates that Johnson's Rule outperforms naive orderings by 7.2--22.0\%, with the largest gains occurring when the default alphabetical ordering happens to place I/O-heavy models first. The combination of Johnson's Rule ordering with prefetching is more effective than naive ordering because compute-heavy groups are scheduled first, providing a longer overlap window for prefetching the next model.
 
 \paragraph{RQ3: How Do Strategies Compare?}
 
-FIFO is unsuitable for multi-model batches due to excessive switching (96\% of time spent on loading). Model Grouping provides deterministic first-order improvement by eliminating redundant switches. Shared-Aware (grouping + Johnson's Rule + prefetching) provides additional benefit through I/O-computation overlap. The relative advantage is consistent across model sizes 0.6B--32B (Experiment~4), indicating robustness. Johnson's Rule provides measurable benefit (7.0--21.8\%) when the batch contains models with diverse I/O-compute characteristics (Experiment~3). Model grouping with Johnson's Rule ordering should be the default for any multi-model batch workload.
+FIFO is unsuitable for multi-model batches due to excessive switching (96\% of time spent on loading). Model Grouping provides deterministic first-order improvement by eliminating redundant switches. Shared-Aware (grouping + Johnson's Rule + prefetching) provides additional benefit through I/O-computation overlap. The relative advantage is consistent across model sizes 0.6B--32B (Experiment~4), indicating robustness. Johnson's Rule provides measurable benefit (7.2--22.0\%) when the batch contains models with diverse I/O-compute characteristics (Experiment~3). Model grouping with Johnson's Rule ordering should be the default for any multi-model batch workload.
 
 \section{What Was Built vs What Was Reused}
 
@@ -1478,7 +1411,7 @@ The work makes five contributions: (1) a two-machine flow-shop formulation mappi
 
 \section{Key Findings}
 
-Model switching is the dominant bottleneck for multi-model batches, with an average per-switch overhead of $\sim$157\,s across a five-model workload. Model grouping reduces makespan by 99\% (78,900s $\to$ 1,107s for a 500-task batch), eliminating $O(n)$ switches. Checkpoint prefetching provides an additional 1.6$\times$ improvement; Johnson's Rule ordering adds a further 1.2$\times$, for a combined 137$\times$ speedup over FIFO. The shared-aware strategy outperforms FIFO by 49--237$\times$ across batch sizes of 100--10,000 tasks, with advantages growing as $n$ increases towards the asymptotic limit of $247\times$. Across model sizes (0.6B--32B), consistent 5.3--6.8$\times$ speedup confirms robustness. Checkpoint prefetching hides 68.7\% of model loading latency from local SSD and 78.9\% from 10\,GbE network storage. Johnson's Rule provides an additional 7.2--22.0\% makespan reduction over naive orderings and is robust to inference time estimation uncertainty.
+Model switching is the dominant bottleneck for multi-model batches, with an average per-switch overhead of $\sim$157\,s across a five-model workload. Model grouping reduces makespan by 99\% (78,900s $\to$ 1,107s for a 500-task batch), eliminating $O(n)$ switches. Checkpoint prefetching provides an additional 1.6$\times$ improvement; Johnson's Rule ordering adds a further 1.2$\times$, for a combined 137$\times$ speedup over FIFO. The shared-aware strategy outperforms FIFO by 49--237$\times$ across batch sizes of 100--10,000 tasks, with advantages growing as $n$ increases towards the asymptotic limit of $247\times$. Across model sizes (0.6B--32B), consistent 5.3--6.8$\times$ speedup confirms robustness. Checkpoint prefetching hides 68.7\% of total cold-switch latency on local SSD (Experiment~2, measuring full transition time including vLLM initialisation) and 78.9\% of the I/O read time on 10\,GbE network storage (Experiment~5, isolating the I/O component). Johnson's Rule provides an additional 7.2--22.0\% makespan reduction over naive orderings and is robust to inference time estimation uncertainty.
 
 The central insight is that batch tasks are not independent: they contain exploitable shared structure that the scheduler should discover and leverage. The algorithm is general and portable --- it operates above the inference engine, making it applicable to vLLM, SGLang, TensorRT-LLM, and other backends without modification. The OpenAI-compatible batch API enables migration from cloud services to self-hosted infrastructure without client code changes. By demonstrating that simple scheduler-level optimisations can dramatically reduce makespan even with network-attached storage, this work provides a foundation for batch-optimised LLM serving systems.
 

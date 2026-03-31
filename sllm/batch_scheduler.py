@@ -798,7 +798,7 @@ class BatchScheduler:
             tp = self._get_tp(model_name)
             if tp > 1:
                 i_time, p_time = self._estimate_group_time(model_name, len(tasks))
-                tp_groups.append((model_name, tasks, tp, i_time + p_time))
+                tp_groups.append((model_name, tasks, tp, i_time + self._MODEL_SWITCH_OVERHEAD_S + p_time))
             else:
                 single_groups.append((model_name, tasks))
 
@@ -857,7 +857,7 @@ class BatchScheduler:
         annotated = []
         for model_name, tasks in single_groups:
             i_time, p_time = self._estimate_group_time(model_name, len(tasks))
-            annotated.append((model_name, tasks, i_time + p_time))
+            annotated.append((model_name, tasks, i_time + self._MODEL_SWITCH_OVERHEAD_S + p_time))
         annotated.sort(key=lambda x: x[2], reverse=True)
 
         single_queues: List[List[tuple]] = [[] for _ in range(remaining_gpus)]
@@ -900,6 +900,9 @@ class BatchScheduler:
                 break
 
             i_time, _ = self._estimate_group_time(h_model, 1)
+            # Add irreducible GPU init cost: creating a new replica on a GPU requires
+            # vLLM CUDA init + warmup even when weights are pre-loaded into CPU memory.
+            i_time += self._MODEL_SWITCH_OVERHEAD_S
             _, p_all = self._estimate_group_time(h_model, len(h_tasks))
             per_task_time = p_all / len(h_tasks)
 
@@ -929,6 +932,7 @@ class BatchScheduler:
             for i in [slowest, fastest]:
                 single_loads[i] = sum(
                     self._estimate_group_time(m, len(t))[0]
+                    + self._MODEL_SWITCH_OVERHEAD_S
                     + self._estimate_group_time(m, len(t))[1]
                     for m, t in single_queues[i]
                 )
@@ -1331,8 +1335,19 @@ class BatchScheduler:
     _BASE_TASK_TIME_S = 0.5
     # Reference model size in bytes (~1B params in fp16 ≈ 2 GB).
     _BASE_MODEL_BYTES = 2e9
-    # NVMe sequential read throughput assumption (bytes/s).
+    # NVMe sequential read throughput for checkpoint I/O to pinned CPU memory (bytes/s).
+    # Raw NVMe bandwidth; used for the overlappable SSD→CPU portion only (Machine A in
+    # the flow-shop formulation). Actual sllm-store read times match size/bandwidth
+    # to within ~10% (Experiment 5, Table 6).
     _NVME_READ_BPS = 3e9
+    # Non-overlappable GPU model-switch overhead: PCIe DMA + vLLM CUDA init + warmup (s).
+    # Measured: 32.6 s average on the test cluster with prefetch enabled (Experiment 2).
+    # This overhead is irreducible even when weights are pre-loaded into CPU pinned memory,
+    # because GPU memory allocation and vLLM engine warm-up cannot be parallelised with
+    # the previous group's inference. Must be included in all lane-load estimates and in
+    # the LPT rebalancing cost check (but NOT in Johnson's Rule, which only models the
+    # overlappable I/O phase).
+    _MODEL_SWITCH_OVERHEAD_S: float = 32.6
 
     def _apply_johnsons_rule(
         self,
@@ -1380,8 +1395,8 @@ class BatchScheduler:
 
         # S1: sort by load time ascending (shortest load first)
         s1.sort(key=lambda x: x[2])
-        # S2: sort by load time descending (longest load first)
-        s2.sort(key=lambda x: x[2], reverse=True)
+        # S2: sort by compute time descending (longest compute first)
+        s2.sort(key=lambda x: x[3], reverse=True)
 
         ordered = [(m, t) for m, t, _, _ in s1] + [(m, t) for m, t, _, _ in s2]
 

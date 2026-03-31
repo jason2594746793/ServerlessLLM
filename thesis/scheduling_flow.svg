@@ -1,0 +1,213 @@
+<svg viewBox="0 0 820 600" xmlns="http://www.w3.org/2000/svg"
+     font-family="'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#64748b"/>
+    </marker>
+    <marker id="arr-amber" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#d97706"/>
+    </marker>
+    <marker id="arr-sm" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+      <polygon points="0 0, 6 2, 0 4" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="820" height="600" fill="white"/>
+
+  <!-- ══════════════════════════════════════════
+       STAGE 1 — Input Batch
+  ══════════════════════════════════════════ -->
+  <text x="410" y="15" text-anchor="middle" font-size="12" font-weight="600" fill="#1e293b">Input Batch</text>
+  <text x="410" y="29" text-anchor="middle" font-size="10" fill="#64748b">1006 tasks · 4 models · interleaved submission</text>
+
+  <rect x="90"  y="36" width="25" height="19" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/><text x="103"  y="49" text-anchor="middle" font-size="9" fill="#1d4ed8" font-weight="600">A</text>
+  <rect x="129" y="36" width="25" height="19" rx="3" fill="#ffedd5" stroke="#f97316" stroke-width="1.2"/><text x="142" y="49" text-anchor="middle" font-size="9" fill="#c2410c" font-weight="600">B</text>
+  <rect x="168" y="36" width="25" height="19" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/><text x="181" y="49" text-anchor="middle" font-size="9" fill="#1d4ed8" font-weight="600">A</text>
+  <rect x="207" y="36" width="25" height="19" rx="3" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.2"/><text x="220" y="49" text-anchor="middle" font-size="9" fill="#6d28d9" font-weight="600">D</text>
+  <rect x="246" y="36" width="25" height="19" rx="3" fill="#dcfce7" stroke="#16a34a" stroke-width="1.2"/><text x="259" y="49" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">C</text>
+  <rect x="285" y="36" width="25" height="19" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/><text x="298" y="49" text-anchor="middle" font-size="9" fill="#1d4ed8" font-weight="600">A</text>
+  <rect x="324" y="36" width="25" height="19" rx="3" fill="#ffedd5" stroke="#f97316" stroke-width="1.2"/><text x="337" y="49" text-anchor="middle" font-size="9" fill="#c2410c" font-weight="600">B</text>
+  <rect x="363" y="36" width="25" height="19" rx="3" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.2"/><text x="376" y="49" text-anchor="middle" font-size="9" fill="#6d28d9" font-weight="600">D</text>
+  <rect x="402" y="36" width="25" height="19" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/><text x="415" y="49" text-anchor="middle" font-size="9" fill="#1d4ed8" font-weight="600">A</text>
+  <rect x="441" y="36" width="25" height="19" rx="3" fill="#dcfce7" stroke="#16a34a" stroke-width="1.2"/><text x="454" y="49" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">C</text>
+  <rect x="480" y="36" width="25" height="19" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/><text x="493" y="49" text-anchor="middle" font-size="9" fill="#1d4ed8" font-weight="600">A</text>
+  <rect x="519" y="36" width="25" height="19" rx="3" fill="#ffedd5" stroke="#f97316" stroke-width="1.2"/><text x="532" y="49" text-anchor="middle" font-size="9" fill="#c2410c" font-weight="600">B</text>
+  <rect x="558" y="36" width="25" height="19" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/><text x="571" y="49" text-anchor="middle" font-size="9" fill="#1d4ed8" font-weight="600">A</text>
+  <rect x="597" y="36" width="25" height="19" rx="3" fill="#dcfce7" stroke="#16a34a" stroke-width="1.2"/><text x="610" y="49" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">C</text>
+  <rect x="636" y="36" width="25" height="19" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/><text x="649" y="49" text-anchor="middle" font-size="9" fill="#1d4ed8" font-weight="600">A</text>
+  <rect x="675" y="36" width="25" height="19" rx="3" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.2"/><text x="688" y="49" text-anchor="middle" font-size="9" fill="#6d28d9" font-weight="600">D</text>
+  <rect x="714" y="36" width="25" height="19" rx="3" fill="#dcfce7" stroke="#16a34a" stroke-width="1.2"/><text x="727" y="49" text-anchor="middle" font-size="9" fill="#15803d" font-weight="600">C</text>
+  <text x="758" y="50" font-size="13" fill="#94a3b8">…</text>
+
+  <!-- ══════════════════════════════════════════
+       PHASE 1 ARROW
+  ══════════════════════════════════════════ -->
+  <line x1="410" y1="59" x2="410" y2="80" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="275" y="64" width="270" height="15" rx="3" fill="#f8fafc"/>
+  <text x="410" y="76" text-anchor="middle" font-size="10" font-weight="600" fill="#475569">Phase 1 — Group by model</text>
+
+  <!-- ══════════════════════════════════════════
+       STAGE 2 — Model Groups
+  ══════════════════════════════════════════ -->
+  <rect x="52"  y="86" width="172" height="44" rx="7" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.6"/>
+  <text x="138" y="105" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8">Model A</text>
+  <text x="138" y="119" text-anchor="middle" font-size="9"  fill="#3b82f6">8B · 500 tasks · TP=1</text>
+
+  <rect x="242" y="86" width="145" height="44" rx="7" fill="#ffedd5" stroke="#f97316" stroke-width="1.6"/>
+  <text x="315" y="105" text-anchor="middle" font-size="11" font-weight="700" fill="#c2410c">Model B</text>
+  <text x="315" y="119" text-anchor="middle" font-size="9"  fill="#f97316">0.6B · 200 tasks · TP=1</text>
+
+  <rect x="405" y="86" width="152" height="44" rx="7" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+  <text x="481" y="105" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">Model C</text>
+  <text x="481" y="119" text-anchor="middle" font-size="9"  fill="#16a34a">3B · 300 tasks · TP=1</text>
+
+  <rect x="575" y="86" width="190" height="44" rx="7" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+  <text x="670" y="105" text-anchor="middle" font-size="11" font-weight="700" fill="#6d28d9">Model D</text>
+  <text x="670" y="119" text-anchor="middle" font-size="9"  fill="#7c3aed">70B · 6 tasks · TP=2</text>
+
+  <!-- ══════════════════════════════════════════
+       PHASE 2 ARROW
+  ══════════════════════════════════════════ -->
+  <line x1="410" y1="134" x2="410" y2="154" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="225" y="139" width="370" height="15" rx="3" fill="#f8fafc"/>
+  <text x="410" y="151" text-anchor="middle" font-size="10" font-weight="600" fill="#475569">Phase 2 — Johnson's Rule + GPU Assignment</text>
+
+  <!-- ══════════════════════════════════════════
+       STAGE 3 — Per-GPU lane assignments
+       TP lane (left) | Single-GPU lanes stacked (right)
+  ══════════════════════════════════════════ -->
+
+  <!-- TP lane panel -->
+  <rect x="18" y="160" width="200" height="152" rx="7" fill="#faf5ff" stroke="#a78bfa" stroke-width="1.4" stroke-dasharray="5,3"/>
+  <text x="118" y="175" text-anchor="middle" font-size="9" font-weight="600" fill="#7c3aed">TP Lane  (GPU 0 + GPU 1)</text>
+  <!-- D box spans full height of TP panel -->
+  <rect x="30" y="182" width="176" height="118" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="118" y="232" text-anchor="middle" font-size="11" font-weight="700" fill="#6d28d9">D  (70B, TP=2)</text>
+  <text x="118" y="249" text-anchor="middle" font-size="8.5" fill="#7c3aed">dedicated TP=2 lane</text>
+  <text x="118" y="265" text-anchor="middle" font-size="8" fill="#94a3b8">6 tasks</text>
+
+  <!-- Single-GPU lanes panel (two rows stacked) -->
+  <rect x="226" y="160" width="576" height="152" rx="7" fill="#f0f9ff" stroke="#93c5fd" stroke-width="1.4" stroke-dasharray="5,3"/>
+  <text x="514" y="175" text-anchor="middle" font-size="9" font-weight="600" fill="#0369a1">Single-GPU Lanes</text>
+
+  <!-- GPU 2 row: B → C → A_r1  (y centre ≈ 210) -->
+  <text x="242" y="213" font-size="9" font-weight="600" fill="#334155">GPU 2:</text>
+  <!-- B -->
+  <rect x="278" y="193" width="86" height="34" rx="5" fill="#ffedd5" stroke="#f97316" stroke-width="1.4"/>
+  <text x="321" y="206" text-anchor="middle" font-size="9"   font-weight="600" fill="#c2410c">B (0.6B)</text>
+  <text x="321" y="219" text-anchor="middle" font-size="7.5" fill="#f97316">200 tasks</text>
+  <line x1="366" y1="210" x2="382" y2="210" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#arr-sm)"/>
+  <!-- C -->
+  <rect x="385" y="193" width="86" height="34" rx="5" fill="#dcfce7" stroke="#16a34a" stroke-width="1.4"/>
+  <text x="428" y="206" text-anchor="middle" font-size="9"   font-weight="600" fill="#15803d">C (3B)</text>
+  <text x="428" y="219" text-anchor="middle" font-size="7.5" fill="#16a34a">150 tasks</text>
+  <line x1="473" y1="210" x2="489" y2="210" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#arr-sm)"/>
+  <!-- A r1 -->
+  <rect x="492" y="193" width="100" height="34" rx="5" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.4"/>
+  <text x="542" y="206" text-anchor="middle" font-size="9"   font-weight="600" fill="#1d4ed8">A  r1</text>
+  <text x="542" y="219" text-anchor="middle" font-size="7.5" fill="#3b82f6">250 tasks</text>
+
+  <!-- Separator between GPU2 and GPU3 rows -->
+  <line x1="234" y1="238" x2="794" y2="238" stroke="#bae6fd" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- GPU 3 row: C → A_r2  (y centre ≈ 260) -->
+  <text x="242" y="263" font-size="9" font-weight="600" fill="#334155">GPU 3:</text>
+  <!-- C -->
+  <rect x="278" y="244" width="86" height="34" rx="5" fill="#dcfce7" stroke="#16a34a" stroke-width="1.4"/>
+  <text x="321" y="257" text-anchor="middle" font-size="9"   font-weight="600" fill="#15803d">C (3B)</text>
+  <text x="321" y="270" text-anchor="middle" font-size="7.5" fill="#16a34a">150 tasks</text>
+  <line x1="366" y1="261" x2="382" y2="261" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#arr-sm)"/>
+  <!-- A r2 -->
+  <rect x="385" y="244" width="100" height="34" rx="5" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.4"/>
+  <text x="435" y="257" text-anchor="middle" font-size="9"   font-weight="600" fill="#1d4ed8">A  r2</text>
+  <text x="435" y="270" text-anchor="middle" font-size="7.5" fill="#3b82f6">250 tasks</text>
+
+  <!-- ══════════════════════════════════════════
+       PHASE 3 ARROW
+  ══════════════════════════════════════════ -->
+  <line x1="410" y1="316" x2="410" y2="336" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="255" y="320" width="310" height="15" rx="3" fill="#f8fafc"/>
+  <text x="410" y="332" text-anchor="middle" font-size="10" font-weight="600" fill="#475569">Phase 3 — Execute in parallel</text>
+
+  <!-- ══════════════════════════════════════════
+       STAGE 4 — Gantt Chart
+  ══════════════════════════════════════════ -->
+
+  <!-- TP band -->
+  <rect x="18" y="342" width="784" height="68" rx="6" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="28" y="355" font-size="9" font-weight="600" fill="#7c3aed">TP Lane</text>
+
+  <!-- Single-GPU band -->
+  <rect x="18" y="416" width="784" height="108" rx="6" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="28" y="429" font-size="9" font-weight="600" fill="#0369a1">Single-GPU Lanes</text>
+
+  <!-- ── TP Lane ── -->
+  <text x="72" y="370" text-anchor="end" font-size="10" font-weight="600" fill="#334155">GPU 0</text>
+  <text x="72" y="397" text-anchor="end" font-size="10" font-weight="600" fill="#334155">GPU 1</text>
+  <path d="M 14 359 L 10 359 L 10 406 L 14 406" fill="none" stroke="#7c3aed" stroke-width="1.3"/>
+  <text x="8" y="386" text-anchor="middle" font-size="8" fill="#6d28d9" transform="rotate(-90,8,386)">TP=2</text>
+
+  <rect x="85" y="357" width="155" height="52" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="163" y="378" text-anchor="middle" font-size="9" font-weight="600" fill="#6d28d9">Model D  (shard 0)</text>
+  <text x="163" y="392" text-anchor="middle" font-size="8.5" fill="#7c3aed">shard 1  ·  6 tasks</text>
+  <rect x="243" y="357" width="527" height="52" rx="5" fill="#f8f8f8" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="507" y="387" text-anchor="middle" font-size="9" fill="#94a3b8" font-style="italic">idle</text>
+
+  <!-- ── GPU 2 ── -->
+  <text x="72" y="453" text-anchor="end" font-size="10" font-weight="600" fill="#334155">GPU 2</text>
+  <rect x="85"  y="435" width="100" height="33" rx="5" fill="#ffedd5" stroke="#f97316" stroke-width="1.5"/>
+  <text x="135" y="449" text-anchor="middle" font-size="9" font-weight="600" fill="#c2410c">B</text>
+  <text x="135" y="461" text-anchor="middle" font-size="7.5" fill="#f97316">200 tasks</text>
+  <line x1="175" y1="445" x2="193" y2="445" stroke="#d97706" stroke-width="1.3" stroke-dasharray="3,2" marker-end="url(#arr-amber)"/>
+  <text x="184" y="439" text-anchor="middle" font-size="7.5" fill="#d97706">pf</text>
+  <rect x="197" y="435" width="126" height="33" rx="5" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="260" y="449" text-anchor="middle" font-size="9" font-weight="600" fill="#15803d">C</text>
+  <text x="260" y="461" text-anchor="middle" font-size="7.5" fill="#16a34a">150 tasks</text>
+  <line x1="313" y1="445" x2="331" y2="445" stroke="#d97706" stroke-width="1.3" stroke-dasharray="3,2" marker-end="url(#arr-amber)"/>
+  <text x="322" y="439" text-anchor="middle" font-size="7.5" fill="#d97706">pf</text>
+  <rect x="335" y="435" width="273" height="33" rx="5" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="472" y="449" text-anchor="middle" font-size="9" font-weight="600" fill="#1d4ed8">A  (replica 1)</text>
+  <text x="472" y="461" text-anchor="middle" font-size="7.5" fill="#3b82f6">250 tasks</text>
+  <rect x="611" y="435" width="159" height="33" rx="5" fill="#f8f8f8" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- ── GPU 3 ── -->
+  <text x="72" y="496" text-anchor="end" font-size="10" font-weight="600" fill="#334155">GPU 3</text>
+  <rect x="85"  y="478" width="146" height="33" rx="5" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="158" y="492" text-anchor="middle" font-size="9" font-weight="600" fill="#15803d">C</text>
+  <text x="158" y="504" text-anchor="middle" font-size="7.5" fill="#16a34a">150 tasks</text>
+  <line x1="221" y1="488" x2="239" y2="488" stroke="#d97706" stroke-width="1.3" stroke-dasharray="3,2" marker-end="url(#arr-amber)"/>
+  <text x="230" y="482" text-anchor="middle" font-size="7.5" fill="#d97706">pf</text>
+  <rect x="243" y="478" width="296" height="33" rx="5" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="391" y="492" text-anchor="middle" font-size="9" font-weight="600" fill="#1d4ed8">A  (replica 2)</text>
+  <text x="391" y="504" text-anchor="middle" font-size="7.5" fill="#3b82f6">250 tasks</text>
+  <rect x="542" y="478" width="228" height="33" rx="5" fill="#f8f8f8" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- replica brace -->
+  <path d="M 772 444 L 778 444 L 778 509 L 772 509" fill="none" stroke="#3b82f6" stroke-width="1.3"/>
+  <text x="783" y="470" font-size="8" fill="#1d4ed8">Model A</text>
+  <text x="783" y="481" font-size="8" fill="#1d4ed8">split by</text>
+  <text x="783" y="492" font-size="8" fill="#1d4ed8">LPT rebal.</text>
+
+  <!-- Time axis -->
+  <line x1="85" y1="522" x2="760" y2="522" stroke="#334155" stroke-width="1.3" marker-end="url(#arr)"/>
+  <text x="765" y="526" font-size="9" fill="#334155">Time</text>
+  <line x1="85"  y1="519" x2="85"  y2="525" stroke="#64748b" stroke-width="1"/>
+  <line x1="243" y1="519" x2="243" y2="525" stroke="#64748b" stroke-width="1"/>
+  <line x1="335" y1="519" x2="335" y2="525" stroke="#64748b" stroke-width="1"/>
+  <line x1="611" y1="519" x2="611" y2="525" stroke="#64748b" stroke-width="1"/>
+
+  <!-- ══════════════════════════════════════════
+       LEGEND
+  ══════════════════════════════════════════ -->
+  <rect x="85" y="535" width="598" height="24" rx="5" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="98"  y="543" width="13" height="9" rx="2" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="115" y="552" font-size="9" fill="#1d4ed8">Model A (8B)</text>
+  <rect x="206" y="543" width="13" height="9" rx="2" fill="#ffedd5" stroke="#f97316" stroke-width="1"/>
+  <text x="223" y="552" font-size="9" fill="#c2410c">Model B (0.6B)</text>
+  <rect x="318" y="543" width="13" height="9" rx="2" fill="#dcfce7" stroke="#16a34a" stroke-width="1"/>
+  <text x="335" y="552" font-size="9" fill="#15803d">Model C (3B)</text>
+  <rect x="426" y="543" width="13" height="9" rx="2" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+  <text x="443" y="552" font-size="9" fill="#6d28d9">Model D (70B, TP=2)</text>
+  <line x1="566" y1="548" x2="582" y2="548" stroke="#d97706" stroke-width="1.3" stroke-dasharray="3,2" marker-end="url(#arr-amber)"/>
+  <text x="587" y="552" font-size="9" fill="#d97706">pf = prefetch</text>
+</svg>
