@@ -46,17 +46,17 @@
 \contentsline {subsection}{\numberline {5.3.1}Methodology}{20}{subsection.5.3.1}%
 \contentsline {subsection}{\numberline {5.3.2}Results}{20}{subsection.5.3.2}%
 \contentsline {subsection}{\numberline {5.3.3}Analysis}{21}{subsection.5.3.3}%
-\contentsline {section}{\numberline {5.4}Experiment 3: Scalability and Robustness}{21}{section.5.4}%
-\contentsline {subsection}{\numberline {5.4.1}Scaling with Batch Size}{21}{subsection.5.4.1}%
+\contentsline {section}{\numberline {5.4}Experiment 3: Scalability and Robustness}{22}{section.5.4}%
+\contentsline {subsection}{\numberline {5.4.1}Scaling with Batch Size}{22}{subsection.5.4.1}%
 \contentsline {section}{\numberline {5.5}Experiment 4: Johnson's Rule Ordering Ablation}{23}{section.5.5}%
 \contentsline {subsection}{\numberline {5.5.1}Methodology}{23}{subsection.5.5.1}%
-\contentsline {subsection}{\numberline {5.5.2}Results}{25}{subsection.5.5.2}%
-\contentsline {subsection}{\numberline {5.5.3}Analysis}{25}{subsection.5.5.3}%
-\contentsline {section}{\numberline {5.6}Experiment 5: Storage Tier Impact on Prefetching}{25}{section.5.6}%
-\contentsline {subsection}{\numberline {5.6.1}Methodology}{25}{subsection.5.6.1}%
+\contentsline {subsection}{\numberline {5.5.2}Results}{24}{subsection.5.5.2}%
+\contentsline {subsection}{\numberline {5.5.3}Analysis}{24}{subsection.5.5.3}%
+\contentsline {section}{\numberline {5.6}Experiment 5: Storage Tier Impact on Prefetching}{26}{section.5.6}%
+\contentsline {subsection}{\numberline {5.6.1}Methodology}{26}{subsection.5.6.1}%
 \contentsline {subsection}{\numberline {5.6.2}Results}{26}{subsection.5.6.2}%
 \contentsline {subsection}{\numberline {5.6.3}Analysis}{26}{subsection.5.6.3}%
-\contentsline {section}{\numberline {5.7}Evaluation Summary}{26}{section.5.7}%
+\contentsline {section}{\numberline {5.7}Evaluation Summary}{27}{section.5.7}%
 \contentsline {chapter}{\numberline {6}Discussion}{28}{chapter.6}%
 \contentsline {section}{\numberline {6.1}Answering the Research Questions}{28}{section.6.1}%
 \contentsline {paragraph}{\numberline {6.1.0.0.1}RQ1: How to Discover and Exploit Shared Structure?}{28}{paragraph.6.1.0.0.1}%
