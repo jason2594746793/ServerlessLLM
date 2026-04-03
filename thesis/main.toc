@@ -52,28 +52,29 @@
 \contentsline {subsection}{\numberline {5.5.1}Methodology}{23}{subsection.5.5.1}%
 \contentsline {subsection}{\numberline {5.5.2}Results}{24}{subsection.5.5.2}%
 \contentsline {subsection}{\numberline {5.5.3}Analysis}{24}{subsection.5.5.3}%
-\contentsline {section}{\numberline {5.6}Experiment 5: Storage Tier Impact on Prefetching}{26}{section.5.6}%
-\contentsline {subsection}{\numberline {5.6.1}Methodology}{26}{subsection.5.6.1}%
-\contentsline {subsection}{\numberline {5.6.2}Results}{26}{subsection.5.6.2}%
-\contentsline {subsection}{\numberline {5.6.3}Analysis}{26}{subsection.5.6.3}%
-\contentsline {section}{\numberline {5.7}Evaluation Summary}{27}{section.5.7}%
-\contentsline {chapter}{\numberline {6}Discussion}{28}{chapter.6}%
-\contentsline {section}{\numberline {6.1}Answering the Research Questions}{28}{section.6.1}%
-\contentsline {paragraph}{\numberline {6.1.0.0.1}RQ1: How to Discover and Exploit Shared Structure?}{28}{paragraph.6.1.0.0.1}%
-\contentsline {paragraph}{\numberline {6.1.0.0.2}RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}{28}{paragraph.6.1.0.0.2}%
-\contentsline {paragraph}{\numberline {6.1.0.0.3}RQ3: How Do Strategies Compare?}{28}{paragraph.6.1.0.0.3}%
-\contentsline {section}{\numberline {6.2}What Was Built vs What Was Reused}{28}{section.6.2}%
-\contentsline {section}{\numberline {6.3}Design Trade-offs}{29}{section.6.3}%
-\contentsline {section}{\numberline {6.4}Algorithm Limitations}{29}{section.6.4}%
-\contentsline {section}{\numberline {6.5}Threats to Validity}{30}{section.6.5}%
-\contentsline {paragraph}{\numberline {6.5.0.0.1}Internal Validity}{30}{paragraph.6.5.0.0.1}%
-\contentsline {paragraph}{\numberline {6.5.0.0.2}External Validity}{30}{paragraph.6.5.0.0.2}%
-\contentsline {paragraph}{\numberline {6.5.0.0.3}Construct Validity}{30}{paragraph.6.5.0.0.3}%
-\contentsline {chapter}{\numberline {7}Future Work}{31}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Inference-Level Extensions: Prefix-Aware Ordering and Multi-LoRA}{31}{section.7.1}%
-\contentsline {section}{\numberline {7.2}Storage Extensions: Adaptive and Network-Aware Prefetching}{31}{section.7.2}%
-\contentsline {section}{\numberline {7.3}Production Readiness: Scalability and Engine Abstraction}{31}{section.7.3}%
-\contentsline {chapter}{\numberline {8}Conclusion}{33}{chapter.8}%
-\contentsline {section}{\numberline {8.1}Contributions}{33}{section.8.1}%
-\contentsline {section}{\numberline {8.2}Key Findings}{33}{section.8.2}%
-\contentsline {chapter}{Bibliography}{34}{chapter*.19}%
+\contentsline {subsection}{\numberline {5.5.4}Regime Sensitivity: Task-Count Variation}{26}{subsection.5.5.4}%
+\contentsline {section}{\numberline {5.6}Experiment 5: Storage Tier Impact on Prefetching}{27}{section.5.6}%
+\contentsline {subsection}{\numberline {5.6.1}Methodology}{27}{subsection.5.6.1}%
+\contentsline {subsection}{\numberline {5.6.2}Results}{27}{subsection.5.6.2}%
+\contentsline {subsection}{\numberline {5.6.3}Analysis}{27}{subsection.5.6.3}%
+\contentsline {section}{\numberline {5.7}Evaluation Summary}{28}{section.5.7}%
+\contentsline {chapter}{\numberline {6}Discussion}{29}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Answering the Research Questions}{29}{section.6.1}%
+\contentsline {paragraph}{\numberline {6.1.0.0.1}RQ1: How to Discover and Exploit Shared Structure?}{29}{paragraph.6.1.0.0.1}%
+\contentsline {paragraph}{\numberline {6.1.0.0.2}RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}{29}{paragraph.6.1.0.0.2}%
+\contentsline {paragraph}{\numberline {6.1.0.0.3}RQ3: How Do Strategies Compare?}{29}{paragraph.6.1.0.0.3}%
+\contentsline {section}{\numberline {6.2}What Was Built vs What Was Reused}{29}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Design Trade-offs}{30}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Algorithm Limitations}{30}{section.6.4}%
+\contentsline {section}{\numberline {6.5}Threats to Validity}{31}{section.6.5}%
+\contentsline {paragraph}{\numberline {6.5.0.0.1}Internal Validity}{31}{paragraph.6.5.0.0.1}%
+\contentsline {paragraph}{\numberline {6.5.0.0.2}External Validity}{31}{paragraph.6.5.0.0.2}%
+\contentsline {paragraph}{\numberline {6.5.0.0.3}Construct Validity}{31}{paragraph.6.5.0.0.3}%
+\contentsline {chapter}{\numberline {7}Future Work}{32}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Inference-Level Extensions: Prefix-Aware Ordering and Multi-LoRA}{32}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Storage Extensions: Adaptive and Network-Aware Prefetching}{32}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Production Readiness: Scalability and Engine Abstraction}{32}{section.7.3}%
+\contentsline {chapter}{\numberline {8}Conclusion}{34}{chapter.8}%
+\contentsline {section}{\numberline {8.1}Contributions}{34}{section.8.1}%
+\contentsline {section}{\numberline {8.2}Key Findings}{34}{section.8.2}%
+\contentsline {chapter}{Bibliography}{35}{chapter*.20}%
