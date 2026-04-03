@@ -927,7 +927,7 @@ Ordering & Makespan (s) & Rank & vs JR & Tier \\
 
 % Johnson's Rule ordering timeline (optimal: 0.6B → 32B → 8B)
 \node[label] at (-1.2, -1.0) {\textbf{Johnson's Rule}};
-\node[label] at (-1.2, -1.5) {\textbf{(0.6B\textrightarrow32B\textrightarrow8B)}};
+\node[label] at (-1.2, -1.5) {\textbf{(0.6B$\to$32B$\to$8B, $n{=}5$ regime)}};
 
 % Group 1: 0.6B (tiny load 0.4s, compute 9s)
 \draw[fill=cred]   (0,   -1.65) rectangle (0.4, -0.95);
@@ -962,7 +962,7 @@ Ordering & Makespan (s) & Rank & vs JR & Tier \\
 
 % Total time marker
 \draw[-{Stealth[length=2mm]}, thick] (0, -3.2) -- (73.1, -3.2);
-\node[font=\scriptsize] at (36.55, -3.6) {Makespan: 73.1s (illustrative; measured JR \textbf{69.7\% faster} than 32B-first tier)};
+\node[font=\scriptsize] at (36.55, -3.6) {Makespan: 73.1s (illustrative; measured JR \textbf{70.3\% faster} than 32B-first tier at $n{=}30$)};
 
 % Legend
 \node[load, minimum width=5, minimum height=0.35cm] at (0, -4.5) {};
@@ -973,7 +973,7 @@ Ordering & Makespan (s) & Rank & vs JR & Tier \\
 \node[font=\scriptsize, anchor=west] at (54, -4.5) {Prefetch (overlap)};
 
 \end{tikzpicture}
-\caption{Execution timeline comparison (schematic): worst-case vs Johnson's Rule ordering for a 3-model batch. Worst case (top) places the I/O-heavy 32B model first, forcing 21.7s of unmasked GPU idle before any inference begins. Johnson's Rule (bottom) places the compute-heavy 0.6B group first to start the 32B prefetch early, then executes 32B while the trivially small 8B checkpoint loads, then finishes with 8B. The residual gap (12.7s) is smaller than the worst-case upfront idle (21.7s). In the measured experiment (Table~\ref{tab:exp4_ordering_results}), the worst-tier orderings (32B-first) averaged 225.5s vs 132.9s for JR (0.6B$\to$32B$\to$8B), a 69.7\% difference; the spread across all six permutations is 94.9s.}
+\caption{Execution timeline comparison (schematic): worst-case vs Johnson's Rule ordering for a 3-model batch. Worst case (top) places the I/O-heavy 32B model first, forcing 21.7s of unmasked GPU idle before any inference begins. Johnson's Rule (bottom) places the compute-heavy 0.6B group first to start the 32B prefetch early, then executes 32B while the trivially small 8B checkpoint loads, then finishes with 8B. The residual gap (12.7s) is smaller than the worst-case upfront idle (21.7s). The schematic uses $n{=}5$-style processing times (0.6B compute window = 9\,s) where the 32B SSD load (21.7\,s) is not fully covered, leaving a 12.7\,s residual; at $n{=}30$, the longer compute window covers both loads completely. In the measured $n{=}30$ experiment (Table~\ref{tab:exp4_ordering_results}), the worst-tier orderings (32B-first) averaged 225.5\,s vs 132.4\,s for JR (0.6B$\to$8B$\to$32B), a 70.3\% difference; the spread across all six permutations is 95.4\,s.}
 \label{fig:exp4_ordering_gantt}
 \end{figure}
 
@@ -1014,7 +1014,7 @@ Ordering & $n=5$/model & $n=15$/model & $n=30$/model \\
 \footnotesize{$\dagger$\,JR-optimal at $n\geq15$ (all S1: ascending $a_i$); $\ddagger$\,JR-optimal at $n=5$ (0.6B S1; 8B, 32B S2: descending $b_i$). ``---'': not measured at $n=15$ (consistent tier structure verified at $n=5$ and $n=30$).}
 \end{table}
 
-JR's ordering rule adapts correctly to workload regime. At $n=30$, all groups are compute-dominant (S1) and JR prescribes 0.6B$\to$8B$\to$32B, achieving rank~1/6. At $n=5$, shorter task windows make 8B and 32B I/O-dominant (S2), so JR adapts to 0.6B$\to$32B$\to$8B, achieving rank~2/6 within the $\pm$2.2--3.0s noise of rank~1 (4.7s gap). In both regimes the three-tier structure (0.6B-first $\ll$ 8B-first $\ll$ 32B-first) is the dominant pattern, and JR deterministically selects the correct first-position model without runtime enumeration. At $n=5$, the worst ordering (32B$\to$0.6B$\to$8B, 219.4s) is 67\% slower than the best 0.6B-first ordering; the 88.3s spread across all six orderings confirms that group order has first-order impact regardless of task count.
+JR's ordering rule adapts correctly to workload regime. At $n=30$, all groups are compute-dominant (S1) and JR prescribes 0.6B$\to$8B$\to$32B, achieving rank~1/6. At $n=5$, shorter task windows make 8B and 32B I/O-dominant (S2), so JR adapts to 0.6B$\to$32B$\to$8B, achieving rank~2/6 with a 4.7s gap in the predicted direction (the difference does not reach statistical significance at $n=3$ runs per condition). In both regimes the three-tier structure (0.6B-first $\ll$ 8B-first $\ll$ 32B-first) is the dominant pattern, and JR deterministically selects the correct first-position model without runtime enumeration. At $n=5$, the worst ordering (32B$\to$0.6B$\to$8B, 219.4s) is 67\% slower than the best 0.6B-first ordering; the 88.3s spread across all six orderings confirms that group order has first-order impact regardless of task count.
 
 
 \section{Experiment 5: Storage Tier Impact on Prefetching}
@@ -1152,7 +1152,7 @@ The current system groups tasks by model but not by prompt prefix. Sorting tasks
 
 \section{Storage Extensions: Adaptive and Network-Aware Prefetching}
 
-The prefetch trigger currently fires at a fixed point; an adaptive policy observing task completion times in real time would maximise overlap for heterogeneous groups. For network storage, integrating with cloud APIs (S3, GCS, Azure Blob) and adjusting prefetch timing based on observed throughput would enable streaming from replicated storage without local caching, primarily an engineering effort given that Experiment~5 already validates the architecture.
+The prefetch trigger currently fires at a fixed point; an adaptive policy observing task completion times in real time would maximise overlap for heterogeneous groups. For network storage, integrating with cloud APIs (S3, GCS, Azure Blob) and adjusting prefetch timing based on observed throughput would enable streaming from replicated storage without local caching, primarily an engineering effort given that Experiment~5 characterises the architecture analytically across storage tiers and validates the NVMe endpoint end-to-end.
 
 \section{Production Readiness: Scalability and Engine Abstraction}
 

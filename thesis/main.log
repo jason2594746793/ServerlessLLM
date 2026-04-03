@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  3 APR 2026 22:30
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  3 APR 2026 22:33
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1256,14 +1256,8 @@ File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
             Default family used instead on input line 896.
-LaTeX Info: Symbol \textrightarrow not provided by
-            font family ptm in TS1 encoding.
-            Default family used instead on input line 930.
-LaTeX Info: Symbol \textrightarrow not provided by
-            font family ptm in TS1 encoding.
-            Default family used instead on input line 930.
 
-Overfull \hbox (7.33029pt too wide) in paragraph at lines 975--976
+Overfull \hbox (67.16983pt too wide) in paragraph at lines 975--976
  [][] 
  []
 
@@ -1316,11 +1310,11 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: 2BE86A48B0EA1677ED70EF05A4E16A0F;12880.
  ) 
 Here is how much of TeX's memory you used:
- 39441 strings out of 478287
- 875808 string characters out of 5849289
- 1360368 words of memory out of 5000000
+ 39444 strings out of 478287
+ 875835 string characters out of 5849289
+ 1364406 words of memory out of 5000000
  56183 multiletter control sequences out of 15000+600000
- 581058 words of font info for 528 fonts, out of 8000000 for 9000
+ 581171 words of font info for 530 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  84i,12n,80p,2033b,1111s stack positions out of 5000i,500n,10000p,200000b,80000s
 {/usr/share/texmf/fonts/enc/dvips/cm-super/cm-super-ts1.enc}{/usr/share/texli
@@ -1337,7 +1331,7 @@ t/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type
 l/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive
 /texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (45 pages, 428234 bytes).
+Output written on main.pdf (45 pages, 428908 bytes).
 PDF statistics:
  1227 PDF objects out of 1440 (max. 8388607)
  867 compressed objects within 9 object streams
