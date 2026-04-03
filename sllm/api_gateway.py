@@ -821,9 +821,10 @@ def create_app(
         enable_johnsons_rule = body.get("enable_johnsons_rule", True)
         enable_prefetch = body.get("enable_prefetch", scheduler.enable_prefetch)
         prefetch_threshold = body.get("prefetch_threshold", scheduler.prefetch_threshold)
+        forced_group_order = body.get("force_group_order", [])
 
         try:
-            scheduler.set_strategy(strategy, buffer_limit, enable_model_grouping, enable_johnsons_rule)
+            scheduler.set_strategy(strategy, buffer_limit, enable_model_grouping, enable_johnsons_rule, forced_group_order)
             scheduler.enable_prefetch = enable_prefetch
             scheduler.prefetch_threshold = prefetch_threshold
 

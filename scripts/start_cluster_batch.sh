@@ -68,6 +68,8 @@ sleep 2
 echo "=== 3. Starting SLLM Head (Gateway + Router + Batch Scheduler) ==="
 # Explicitly enable batch scheduler
 export ENABLE_BATCH_SCHEDULER=true
+# Pass pinned memory pool size to sllm-store (80 GB fits Qwen2.5-32B-Instruct ~64 GB)
+export SLLM_STORE_MEM_POOL_SIZE=80GB
 
 CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES $SLLM_BIN start \
     --host 0.0.0.0 \

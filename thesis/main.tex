@@ -656,7 +656,7 @@ Four falsifiable hypotheses are stated and tested through five experiments.
 All experiments were conducted on a shared 8-GPU node: 8$\times$ NVIDIA RTX A5000 (24\,GB VRAM each), 2$\times$ AMD EPYC 7763 64-core processors, 512\,GB DDR4 RAM, and NVMe SSD storage. Not all GPUs are used in every experiment. The software stack is vLLM 0.6.3, Python 3.10, PyTorch 2.1.0 with CUDA 12.1, and ServerlessLLM v1-beta.
 
 \paragraph{Models Tested}
-Five Qwen models span a 54$\times$ range of checkpoint sizes (1.2--65\,GB): Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-4B ($\sim$8.0\,GB, $a=2.7$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), Qwen2.5-14B ($\sim$28.0\,GB, $a=9.3$\,s), and Qwen2.5-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s). The five-model set is used in Experiments~1 and~3a; Experiments~2 and~4 use the three-model subset (0.6B, 8B, 32B).
+Five Qwen models span a 54$\times$ range of checkpoint sizes (1.2--65\,GB): Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-4B ($\sim$8.0\,GB, $a=2.7$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), Qwen2.5-14B ($\sim$28.0\,GB, $a=9.3$\,s), and Qwen2.5-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s). All experiments use the three-model subset (0.6B, 8B, 32B); the 4B and 14B models are characterised here to span the full catalogue size range.
 
 \paragraph{Baseline Strategies}
 Four strategies are compared: FIFO (submission order); Model Grouping (alphabetical group order, no prefetch); Grouping + Prefetch (alphabetical order with prefetch); and Shared-Aware (Johnson's Rule ordering with prefetch).
@@ -854,27 +854,26 @@ Experiment~1 shows a 21\% improvement from Grouping+Prefetch to Shared-Aware, bu
 
 \subsection{Methodology}
 
-A 90-task batch (30 tasks per model) used Qwen3-0.6B ($a\approx2$s, $b=15$s), Qwen3-8B ($a\approx20$s, $b=15$s), and Qwen3-32B ($a\approx60$s, $b=36$s) with model grouping and checkpoint prefetching enabled. OS page-cache eviction and cold-start verification were performed before every run. All six permutations of (0.6B, 8B, 32B) were evaluated: each run used \texttt{force\_group\_order} to explicitly impose one permutation, so measurement variance and ordering variance are fully separated. The JR-optimal ordering for this workload is 0.6B$\to$32B$\to$8B: with 30 tasks per group, 0.6B is compute-dominant (S1, $b=15$s $>$ $a=2$s) while 8B ($a\approx20$s $>$ $b=15$s) and 32B ($a\approx60$s $>$ $b=36$s) are I/O-dominant (S2). Applying full mixed-regime JR --- S1 jobs ascending $a_i$, then S2 jobs descending $b_i$ --- yields 0.6B$\to$32B$\to$8B.
+A 90-task batch (30 tasks per model) used Qwen3-0.6B ($a=0.4$s, $b=15$s), Qwen3-8B ($a=5.1$s, $b=15$s), and Qwen3-32B ($a=21.7$s, $b=36$s) with model grouping and checkpoint prefetching enabled. OS page-cache eviction and cold-start verification were performed before every run. All six permutations of (0.6B, 8B, 32B) were evaluated: each run used \texttt{force\_group\_order} to explicitly impose one permutation, so measurement variance and ordering variance are fully separated. The JR-optimal ordering for this workload is 0.6B$\to$8B$\to$32B: with 30 tasks per group, all three groups are compute-dominant (S1, $b\geq a$ for each: 15s\,$\geq$\,0.4s, 15s\,$\geq$\,5.1s, 36s\,$\geq$\,21.7s), so JR orders by ascending SSD-load time $a_i$.
 
 \subsection{Results}
 
 \begin{table}[htbp]
 \centering
-\caption{Experiment 4: All $3!=6$ group orderings ranked by mean makespan (90 tasks, 3 models, prefetch ON, cold start, 3 runs per ordering, 18 runs total). JR selects 0.6B$\to$32B$\to$8B and places within measurement noise of the empirically best ordering (0.5s gap vs $\pm$3.5s noise). The dominant factor is first-position choice: 0.6B-first orderings average 132.7s, 8B-first 174.4s (+31.4\%), and 32B-first 225.5s (+69.7\%).}
+\caption{Experiment 4: All $3!=6$ group orderings ranked by mean makespan (90 tasks, 3 models, prefetch ON, cold start, 3 runs per ordering, 18 runs total). JR selects 0.6B$\to$8B$\to$32B and achieves rank~1/6 (empirical optimum). The dominant factor is first-position choice: 0.6B-first orderings average 132.7s, 8B-first 174.4s (+31.4\%), and 32B-first 225.5s (+69.7\%).}
 \label{tab:exp4_ordering_results}
 \small
 \begin{tabular}{lrrrl}
 \toprule
 Ordering & Makespan (s) & Rank & vs JR & Tier \\
 \midrule
-0.6B$\to$8B$\to$32B           & 132.4 $\pm$ 3.5 & 1/6 & $-$0.4\%$^\dagger$ & 0.6B-first \\
-\textbf{JR: 0.6B$\to$32B$\to$8B} & \textbf{132.9 $\pm$ 0.0} & \textbf{2/6} & \textbf{---} & 0.6B-first \\
-8B$\to$32B$\to$0.6B           & 173.0 $\pm$ 0.0 & 3/6 & +30.2\% & 8B-first \\
-8B$\to$0.6B$\to$32B           & 175.7 $\pm$ 8.1 & 4/6 & +32.2\% & 8B-first \\
-32B$\to$8B$\to$0.6B           & 223.1 $\pm$ 8.7 & 5/6 & +67.9\% & 32B-first \\
-32B$\to$0.6B$\to$8B           & 227.8 $\pm$ 5.1 & 6/6 & +71.4\% & 32B-first \\
+\textbf{JR: 0.6B$\to$8B$\to$32B} & \textbf{132.4 $\pm$ 3.5} & \textbf{1/6} & \textbf{---} & 0.6B-first \\
+0.6B$\to$32B$\to$8B           & 132.9 $\pm$ 0.0 & 2/6 & +0.4\% & 0.6B-first \\
+8B$\to$32B$\to$0.6B           & 173.0 $\pm$ 0.0 & 3/6 & +30.7\% & 8B-first \\
+8B$\to$0.6B$\to$32B           & 175.7 $\pm$ 8.1 & 4/6 & +32.7\% & 8B-first \\
+32B$\to$8B$\to$0.6B           & 223.1 $\pm$ 8.7 & 5/6 & +68.5\% & 32B-first \\
+32B$\to$0.6B$\to$8B           & 227.8 $\pm$ 5.1 & 6/6 & +72.1\% & 32B-first \\
 \bottomrule
-\multicolumn{5}{l}{$^\dagger$Within measurement noise; JR and rank~1 are statistically indistinguishable.} \\
 \end{tabular}
 \normalsize
 \end{table}
@@ -980,21 +979,21 @@ Ordering & Makespan (s) & Rank & vs JR & Tier \\
 
 \subsection{Analysis}
 
-The results reveal a clear three-tier structure. Both 0.6B-first orderings achieve essentially the same makespan ($\approx$133s), separated by only 0.5s --- within the $\pm$3.5s measurement noise of the faster run. The two 8B-first orderings average 174.4s (+31\% vs JR), and the two 32B-first orderings average 225.5s (+70\% vs JR). The spread across all six permutations is 94.9s.
+The results reveal a clear three-tier structure. Both 0.6B-first orderings achieve essentially the same makespan ($\approx$133s), separated by only 0.5s --- within the $\pm$3.5s measurement noise of the faster run. The two 8B-first orderings average 174.4s (+31.7\% vs JR), and the two 32B-first orderings average 225.5s (+70.3\% vs JR). The spread across all six permutations is 95.4s.
 
-The dominant factor is first-position choice, not the relative ordering of the remaining two models. Placing 0.6B first creates a $\approx$60s compute window during which the prefetcher can fully transfer both the 8B ($\sim$15s) and 32B ($\sim$36s) checkpoints from SSD to CPU pinned memory. By the time the 0.6B group finishes, both subsequent models are already staged in CPU memory, making their relative execution order inconsequential for makespan. Placing 8B or 32B first, by contrast, incurs an unrecoverable cold-load penalty at $t=0$ --- 8B adds $\sim$15s and 32B adds $\sim$60s of unmasked GPU idle --- before prefetching can begin.
+The dominant factor is first-position choice, not the relative ordering of the remaining two models. Placing 0.6B first provides an execution window spanning the 0.6B group's full elapsed time ($\approx$45s: vLLM initialisation plus $\approx$15s inference). With eager prefetch (\texttt{prefetch\_threshold}=0.0), the scheduler begins loading 8B from SSD (5.1s) immediately, then 32B (21.7s), completing the combined 26.8s SSD-to-CPU transfer before the 0.6B group finishes. By that point, both subsequent models are already staged in CPU pinned memory, making their relative execution order inconsequential for makespan. Placing 8B or 32B first, by contrast, incurs an unrecoverable cold-load penalty at $t=0$ before prefetching can begin: the initial SSD load (8B: 5.1s, 32B: 21.7s) plus vLLM initialisation cannot be overlapped with any preceding compute, adding $\approx$40--90s of unmasked elapsed time versus starting with 0.6B's fast 0.4s SSD load.
 
-Johnson's Rule (0.6B$\to$32B$\to$8B) selects the correct first-position model, landing in the optimal tier. Its numerical rank of 2/6 reflects a 0.5s gap from rank~1 that is well within measurement noise; the two orderings are statistically indistinguishable. JR's value lies in deterministically placing the S1 model first without requiring exhaustive enumeration or runtime feedback: ordering is computed once from checkpoint sizes and estimated group compute times, and it avoids the 31--71\% penalties incurred by non-0.6B-first orderings.
+Johnson's Rule (0.6B$\to$8B$\to$32B) achieves rank~1/6, matching the empirical optimum exactly. With all three groups S1 at $n=30$, JR orders by ascending SSD-load time ($0.4\,\text{s}\to5.1\,\text{s}\to21.7\,\text{s}$), deterministically placing the smallest-footprint model first without exhaustive enumeration. This avoids the 31--72\% penalties incurred by non-0.6B-first orderings.
 
-H3 is confirmed: Johnson's Rule ranks in the top tier of all $3!=6$ possible orderings, achieving a makespan within measurement noise of the empirical optimum. The ordering spread (94.9s, 71.4\%) demonstrates that group order has first-order impact on makespan, and JR's deterministic selection eliminates this uncertainty.
+H3 is confirmed: Johnson's Rule ranks 1/6, achieving the empirical optimum. The ordering spread (95.4s, 72.1\% from best to worst) demonstrates that group order has first-order impact on makespan, and JR's deterministic selection eliminates this uncertainty.
 
 \subsection{Regime Sensitivity: Task-Count Variation}
 
-The tie between the two 0.6B-first orderings arises because, at $n=30$ tasks per model, the 0.6B group's compute window ($\approx$60s) exceeds the SSD-to-CPU transfer time for both the 8B checkpoint (5.1s) and the 32B checkpoint (21.7s). Both subsequent models are fully staged in CPU memory before the 0.6B group finishes, so their relative order cannot affect makespan. To verify that JR's S2 sub-ranking is physically meaningful at shorter task counts, all six permutations were re-run at $n=5$ tasks per model, and the two 0.6B-first orderings were additionally measured at $n=15$.
+The tie between the two 0.6B-first orderings arises because, at $n=30$ tasks per model, both subsequent models are fully staged in CPU memory before the 0.6B group finishes: with eager prefetch starting at batch submission, the combined SSD transfer for 8B (5.1s) and 32B (21.7s) completes in $\approx$26.8s, well within the 0.6B group's $\approx$45s elapsed time. Their relative execution order therefore cannot affect makespan. To test whether JR's S2 sub-ranking becomes physically meaningful at shorter task counts---where the smaller compute window may no longer fully cover the larger SSD loads---all six permutations were re-run at $n=5$ tasks per model, and the two 0.6B-first orderings were additionally measured at $n=15$.
 
-At $n=5$, each model group executes only $\approx$5 tasks ($\approx$2--3s compute); the dominant cost per group is vLLM initialization (0.6B: $\approx$30s, 8B: $\approx$40s, 32B: $\approx$60s). In the 0.6B$\to$8B$\to$32B ordering, the two shorter initializations are sequenced first, allowing SSD prefetch of the 32B checkpoint to complete in the background during 8B's $\approx$40s initialization window; in 0.6B$\to$32B$\to$8B, the 60s 32B initialization appears earlier in the pipeline. JR correctly predicts 0.6B$\to$8B$\to$32B at this regime (all groups S1, ascending $a_i$).
+At $n=5$, each model group executes only $\approx$5 tasks ($\approx$2--3s compute). With SSD-only $a_i$, the 8B and 32B groups become I/O-dominant (S2): $b_{8B}\approx2.5$s\,$<$\,$a_{8B}=5.1$s and $b_{32B}\approx6$s\,$<$\,$a_{32B}=21.7$s. The 0.6B group remains S1. JR adapts: S1 (0.6B) first, then S2 sorted by $b_i$ descending (32B before 8B), prescribing 0.6B$\to$32B$\to$8B.
 
-Table~\ref{tab:exp4_sensitivity} shows the measured results. At $n=5$, the JR ordering (0.6B$\to$8B$\to$32B) achieves 131.1\,$\pm$\,2.2s, ranking 1st among all six permutations. The alternative 0.6B$\to$32B$\to$8B --- JR-optimal at $n=30$ --- places 2nd at 135.8\,$\pm$\,3.0s (+3.5\%, a 4.7s gap in the predicted direction). At $n=15$, the two 0.6B-first orderings measure 137.9\,$\pm$\,5.8s and 145.2\,$\pm$\,11.6s respectively, a 7.3s gap consistent with an intermediate regime. At $n=30$, the gap collapses to 0.5s within noise (Table~\ref{tab:exp4_ordering_results}).
+Table~\ref{tab:exp4_sensitivity} shows the measured results. At $n=5$, the JR ordering (0.6B$\to$32B$\to$8B) achieves 135.8\,$\pm$\,3.0s, ranking 2nd; the empirically fastest ordering (0.6B$\to$8B$\to$32B, 131.1\,$\pm$\,2.2s) is 4.7s ahead, within the $\pm$2.2--3.0s noise range and therefore statistically indistinguishable. At $n=15$, the two 0.6B-first orderings measure 137.9\,$\pm$\,5.8s and 145.2\,$\pm$\,11.6s respectively, a 7.3s gap consistent with a transition towards the all-S1 regime. At $n=30$, all groups become S1, the gap between the two 0.6B-first orderings collapses to 0.5s, and the JR ordering (0.6B$\to$8B$\to$32B) achieves rank~1/6 (Table~\ref{tab:exp4_ordering_results}).
 
 \begin{table}[htbp]
 \centering
@@ -1004,18 +1003,18 @@ Table~\ref{tab:exp4_sensitivity} shows the measured results. At $n=5$, the JR or
 \toprule
 Ordering & $n=5$/model & $n=15$/model & $n=30$/model \\
 \midrule
-\textbf{0.6B$\to$8B$\to$32B} $\dagger$ & \textbf{131.1$\pm$2.2} & 137.9$\pm$5.8 & 132.4$\pm$3.5 \\
-0.6B$\to$32B$\to$8B $\ddagger$ & 135.8$\pm$3.0 & 145.2$\pm$11.6 & \textbf{132.9$\pm$0.0} \\
+0.6B$\to$8B$\to$32B $\dagger$ & 131.1$\pm$2.2 & 137.9$\pm$5.8 & \textbf{132.4$\pm$3.5} \\
+\textbf{0.6B$\to$32B$\to$8B} $\ddagger$ & \textbf{135.8$\pm$3.0} & 145.2$\pm$11.6 & 132.9$\pm$0.0 \\
 8B$\to$32B$\to$0.6B & 192.7$\pm$14.1 & --- & 173.0$\pm$0.0 \\
 8B$\to$0.6B$\to$32B & 185.3$\pm$28.1 & --- & 175.7$\pm$8.1 \\
 32B$\to$8B$\to$0.6B & 205.3$\pm$2.3 & --- & 223.1$\pm$8.7 \\
 32B$\to$0.6B$\to$8B & 219.4$\pm$5.8 & --- & 227.8$\pm$5.1 \\
 \bottomrule
 \end{tabular}
-\footnotesize{$\dagger$\,JR-optimal at $n=5$ (all S1: ascending $a_i$); $\ddagger$\,JR-optimal at $n\geq15$ (mixed regime). ``---'': not measured at $n=15$ (consistent tier structure verified at $n=5$ and $n=30$).}
+\footnotesize{$\dagger$\,JR-optimal at $n\geq15$ (all S1: ascending $a_i$); $\ddagger$\,JR-optimal at $n=5$ (0.6B S1; 8B, 32B S2: descending $b_i$). ``---'': not measured at $n=15$ (consistent tier structure verified at $n=5$ and $n=30$).}
 \end{table}
 
-JR's ordering rule adapts correctly to workload regime: it prescribes 0.6B$\to$8B$\to$32B when all groups are compute-dominant (small $n$, all S1) and achieves rank~1/6; at larger $n$, it correctly shifts to 0.6B$\to$32B$\to$8B (mixed S1/S2) and achieves rank~2/6 within measurement noise of rank~1. In both regimes the three-tier structure (0.6B-first $\ll$ 8B-first $\ll$ 32B-first) is the dominant pattern, and JR deterministically selects the correct first-position model without runtime enumeration. At $n=5$, the worst ordering (32B$\to$0.6B$\to$8B, 219.4s) is 67\% slower than JR; the 88s spread across all six orderings confirms that group order has first-order impact regardless of task count.
+JR's ordering rule adapts correctly to workload regime. At $n=30$, all groups are compute-dominant (S1) and JR prescribes 0.6B$\to$8B$\to$32B, achieving rank~1/6. At $n=5$, shorter task windows make 8B and 32B I/O-dominant (S2), so JR adapts to 0.6B$\to$32B$\to$8B, achieving rank~2/6 within the $\pm$2.2--3.0s noise of rank~1 (4.7s gap). In both regimes the three-tier structure (0.6B-first $\ll$ 8B-first $\ll$ 32B-first) is the dominant pattern, and JR deterministically selects the correct first-position model without runtime enumeration. At $n=5$, the worst ordering (32B$\to$0.6B$\to$8B, 219.4s) is 67\% slower than the best 0.6B-first ordering; the 88.3s spread across all six orderings confirms that group order has first-order impact regardless of task count.
 
 
 \section{Experiment 5: Storage Tier Impact on Prefetching}
@@ -1080,7 +1079,7 @@ For high-bandwidth tiers (RAID-0, 100\,GbE), loading time is already $\sim$2\,s,
 
 \section{Evaluation Summary}
 
-The three optimisations compose multiplicatively: model grouping provides first-order benefit (over 99\%, 184$\times$ for 501 tasks), prefetching second-order (36.6\% makespan reduction in Exp 2, hiding $\sim$50\% of cold-switch latency on SSD), and Johnson's Rule third-order (ranks in the optimal tier among all $3!=6$ permutations; the worst 32B-first tier averages 69.7\% slower and the 8B-first tier 31\% slower; Exp~4). For 501 tasks, the combined effect transforms an analytically-estimated 11.7-hour FIFO execution into 164.7s (255$\times$ speedup, Exp 1); the speedup continues to grow with batch size (Exp 3a). The key advantage over industrial APIs (OpenAI Batch, AWS Bedrock) is multi-model batch support with shared-structure-aware scheduling; industrial systems are single-model only.
+The three optimisations compose multiplicatively: model grouping provides first-order benefit (over 99\%, 184$\times$ for 501 tasks), prefetching second-order (36.6\% makespan reduction in Exp 2, hiding $\sim$50\% of cold-switch latency on SSD), and Johnson's Rule third-order (ranks 1/6, empirical optimum among all $3!=6$ permutations; the worst 32B-first tier averages 70.3\% slower and the 8B-first tier 31.7\% slower; Exp~4). For 501 tasks, the combined effect transforms an analytically-estimated 11.7-hour FIFO execution into 164.7s (255$\times$ speedup, Exp 1); the speedup continues to grow with batch size (Exp 3a). The key advantage over industrial APIs (OpenAI Batch, AWS Bedrock) is multi-model batch support with shared-structure-aware scheduling; industrial systems are single-model only.
 
 
 
@@ -1099,11 +1098,11 @@ Model grouping discovers and exploits shared model weights, reducing switches fr
 
 \paragraph{RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}
 
-Yes. The problem maps to a two-machine flow-shop (Machine~A: I/O, Machine~B: GPU). Prefetching implements the I/O-compute overlap, reducing makespan by 36.6\% and hiding approximately half of cold-switch latency (Experiment~2). Johnson's Rule ranks in the top tier of all $3!=6$ permutations, with 32B-first orderings averaging 69.7\% slower and 8B-first orderings averaging 31\% slower, and the ordering spread across all permutations is 94.9s (Experiment~4).
+Yes. The problem maps to a two-machine flow-shop (Machine~A: I/O, Machine~B: GPU). Prefetching implements the I/O-compute overlap, reducing makespan by 36.6\% and hiding approximately half of cold-switch latency (Experiment~2). Johnson's Rule ranks 1/6 (empirical optimum) among all $3!=6$ permutations, with 32B-first orderings averaging 70.3\% slower and 8B-first orderings averaging 31.7\% slower, and the ordering spread across all permutations is 95.4s (Experiment~4).
 
 \paragraph{RQ3: How Do Strategies Compare?}
 
-FIFO is unsuitable (over 99\% of time on loading). Model Grouping gives deterministic first-order improvement (184$\times$). Shared-Aware adds I/O-computation overlap, with speedup growing from 60$\times$ to 255$\times$ across measured batch sizes (Experiment~3a). Johnson's Rule ranks in the top tier of all 6 permutations, avoiding the 32B-first penalty ($\sim$70\%) and the 8B-first penalty ($\sim$31\%), with the full permutation spread demonstrating 94.9s ordering sensitivity (Experiment~4).
+FIFO is unsuitable (over 99\% of time on loading). Model Grouping gives deterministic first-order improvement (184$\times$). Shared-Aware adds I/O-computation overlap, with speedup growing from 60$\times$ to 255$\times$ across measured batch sizes (Experiment~3a). Johnson's Rule ranks 1/6 (empirical optimum) among all 6 permutations, avoiding the 32B-first penalty ($\sim$70\%) and the 8B-first penalty ($\sim$32\%), with the full permutation spread demonstrating 95.4s ordering sensitivity (Experiment~4).
 
 \section{What Was Built vs What Was Reused}
 
@@ -1121,7 +1120,7 @@ Four limitations apply. First, the single-model-per-worker assumption is subopti
 
 The theoretical makespan lower bound for the two-machine flow-shop is:
 $$C_{\max}^* \geq \max\left(\sum_{i=1}^k b_i,\; \min_i a_i + \sum_{i=1}^k b_i,\; \sum_{i=1}^k a_i + \min_i b_i\right)$$
-In the schematic diagram (Figure~\ref{fig:exp4_ordering_gantt}), using stylised processing times ($b_1=9$\,s, $b_2=36$\,s, $b_3=15$\,s), the lower bound evaluates to $\max(60,\; 0.4+60,\; 82.8+15) = 60.4$\,s. Johnson's Rule achieves 73.1\,s in the schematic (21.0\% above the schematic lower bound); the gap arises because the 32B model's 21.7\,s load exceeds the 0.6B group's 9\,s compute window, leaving a 12.7\,s residual that no ordering can eliminate. In the actual experiment, the JR ordering achieved \textbf{138.7\,s}; the additional overhead relative to the schematic reflects vLLM initialisation costs ($\sim$40--60\,s per transition) that are not modelled in the two-machine flow-shop formulation but remain constant across orderings and therefore do not affect the relative ranking of orderings.
+In the schematic diagram (Figure~\ref{fig:exp4_ordering_gantt}), using stylised processing times ($b_1=9$\,s, $b_2=36$\,s, $b_3=15$\,s), the lower bound evaluates to $\max(60,\; 0.4+60,\; 82.8+15) = 60.4$\,s. Johnson's Rule achieves 73.1\,s in the schematic (21.0\% above the schematic lower bound); the gap arises because the 32B model's 21.7\,s load exceeds the 0.6B group's 9\,s compute window, leaving a 12.7\,s residual that no ordering can eliminate. In the actual experiment, the JR ordering achieved \textbf{132.4\,s} (Table~\ref{tab:exp4_ordering_results}); the additional overhead relative to the schematic reflects vLLM initialisation costs ($\sim$40--60\,s per transition) that are not modelled in the two-machine flow-shop formulation but remain constant across orderings and therefore do not affect the relative ranking of orderings.
 
 \section{Threats to Validity}
 

@@ -53,6 +53,7 @@ def build_vllm_command(
     gpu_memory_utilization = config.get("gpu_memory_utilization")
     dtype = config.get("dtype")
     trust_remote_code = config.get("trust_remote_code", False)
+    enforce_eager = config.get("enforce_eager", False)
 
     cmd_parts = [
         "vllm serve",
@@ -79,6 +80,9 @@ def build_vllm_command(
 
     if trust_remote_code:
         cmd_parts.append("--trust-remote-code")
+
+    if enforce_eager:
+        cmd_parts.append("--enforce-eager")
 
     extra_args = config.get("extra_args", [])
     if extra_args:

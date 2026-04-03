@@ -56,6 +56,9 @@ class BatchScheduler:
         # Johnson's Rule: reorder model groups to minimise I/O idle
         self.enable_johnsons_rule = True
 
+        # Forced group ordering for experiments (overrides both alphabetical and JR)
+        self.forced_group_order: list = []
+
         # Tensor parallelism: model_name → number of GPUs required.
         # Auto-computed from model size vs GPU memory; manual overrides
         # via set_tp_config() take priority.
@@ -183,7 +186,7 @@ class BatchScheduler:
     #  Strategy                                                           #
     # ------------------------------------------------------------------ #
 
-    def set_strategy(self, strategy: str, buffer_limit: int = 10, enable_model_grouping: bool = True, enable_johnsons_rule: bool = True):
+    def set_strategy(self, strategy: str, buffer_limit: int = 10, enable_model_grouping: bool = True, enable_johnsons_rule: bool = True, forced_group_order: list = None):
         valid_strategies = ["sync", "chunked", "semaphore"]
         if strategy not in valid_strategies:
             raise ValueError(f"Invalid strategy: {strategy}. Must be one of {valid_strategies}")
@@ -195,7 +198,8 @@ class BatchScheduler:
         self.buffer_limit = effective_limit
         self.enable_model_grouping = enable_model_grouping
         self.enable_johnsons_rule = enable_johnsons_rule
-        logger.info(f"Strategy updated: {strategy}, buffer_limit={self.buffer_limit}, model_grouping={enable_model_grouping}, johnsons_rule={enable_johnsons_rule}")
+        self.forced_group_order = forced_group_order or []
+        logger.info(f"Strategy updated: {strategy}, buffer_limit={self.buffer_limit}, model_grouping={enable_model_grouping}, johnsons_rule={enable_johnsons_rule}, forced_group_order={self.forced_group_order}")
 
     def _unregister_batch(self, batch_id: str, tasks: List[BatchTask]):
         """Remove batch from active tracking and unregister from autoscaler."""
@@ -311,7 +315,17 @@ class BatchScheduler:
 
         deployment = self.database.get_deployment_by_id(deployment_id)
         tp = self._get_tp(model)
-        backend_config = {"tensor_parallel_size": tp} if tp > 1 else None
+        # Use 0.85 to leave headroom for other processes on the same GPU.
+        gpu_mem_util = float(os.environ.get("SLLM_GPU_MEM_UTIL", "0.85"))
+        if tp > 1:
+            backend_config = {"tensor_parallel_size": tp,
+                              "gpu_memory_utilization": gpu_mem_util}
+        else:
+            backend_config = {"gpu_memory_utilization": gpu_mem_util}
+        # enforce_eager=True disables CUDA-graph capture, reducing startup time
+        # from ~50s to ~10-15s per model switch. Slightly slower per-token
+        # throughput but amortised over large batches.
+        backend_config["enforce_eager"] = True
         if not deployment:
             available_gpus = await self._get_available_gpu_count()
             logger.info(f"Auto-creating deployment for {model} (max_replicas={available_gpus}, tp={tp})")
@@ -475,45 +489,32 @@ class BatchScheduler:
                         logger.warning(f"[UNLOAD] cancel_instance({inst.instance_id}) failed: {e}")
 
                 if active:
-                    # Wait for the vllm EngineCore subprocess to actually exit
-                    # and release GPU memory (up to 60s).
-                    # Only check GPUs in CUDA_VISIBLE_DEVICES (shared cluster).
-                    gpu_ids = os.environ.get("CUDA_VISIBLE_DEVICES", "")
-                    smi_cmd = [
-                        "nvidia-smi",
-                        "--query-compute-apps=pid,used_memory",
-                        "--format=csv,noheader,nounits",
-                    ]
-                    if gpu_ids:
-                        smi_cmd.extend(["--id=" + gpu_ids])
-                    for _attempt in range(60):
-                        await asyncio.sleep(1)
-                        try:
-                            smi = await asyncio.to_thread(
-                                lambda: subprocess.run(
-                                    smi_cmd,
-                                    capture_output=True, text=True, timeout=10
-                                )
+                    # Wait for all cancelled vLLM instances to fully exit.
+                    # Poll pylet instance status: once CANCELLED/COMPLETED/FAILED
+                    # the process has truly exited and GPU memory is freed.
+                    # This is more reliable than nvidia-smi (which can show
+                    # unrelated processes or CUDA-registered pinned memory).
+                    TERMINAL = {"CANCELLED", "COMPLETED", "FAILED", "UNKNOWN"}
+                    for inst in active:
+                        for _attempt in range(60):
+                            await asyncio.sleep(1)
+                            try:
+                                info = await self.pylet_client.get_instance(inst.instance_id)
+                                if info is None or info.status in TERMINAL:
+                                    logger.info(
+                                        f"[UNLOAD] GPU memory released after "
+                                        f"{_attempt + 1}s for {model_name} "
+                                        f"(instance {inst.instance_id} → {info.status if info else 'gone'})"
+                                    )
+                                    break
+                            except Exception as _e:
+                                logger.debug(f"[UNLOAD] instance status poll failed: {_e}")
+                                break  # can't poll → assume done
+                        else:
+                            logger.warning(
+                                f"[UNLOAD] GPU memory still held after 60s for "
+                                f"{model_name} — proceeding anyway"
                             )
-                            heavy = [
-                                line.strip()
-                                for line in smi.stdout.splitlines()
-                                if line.strip()
-                                and int(line.split(",")[1].strip()) > 1024
-                            ]
-                            if not heavy:
-                                logger.info(
-                                    f"[UNLOAD] GPU memory released after "
-                                    f"{_attempt + 1}s for {model_name}"
-                                )
-                                break
-                        except Exception as _e:
-                            logger.debug(f"[UNLOAD] nvidia-smi poll failed: {_e}")
-                    else:
-                        logger.warning(
-                            f"[UNLOAD] GPU memory still held after 60s for "
-                            f"{model_name} — proceeding anyway"
-                        )
             except Exception as e:
                 logger.warning(f"[UNLOAD] Failed to query/cancel instances for {deployment_id}: {e}")
 
@@ -538,6 +539,7 @@ class BatchScheduler:
         batch_id: str,
         num_replicas_per_model: Dict[str, int],
         num_gpus: int,
+        peak_gpus: int = None,
     ):
         """Ensure GPU allocations match batch requirements before launching.
 
@@ -604,10 +606,13 @@ class BatchScheduler:
 
         # Wait for reconciler to actually free the GPUs
         if self.pylet_client:
-            total_needed = sum(
-                        reps * self._get_tp(model)
-                        for model, reps in num_replicas_per_model.items()
-                    )
+            # peak_gpus reflects the maximum SIMULTANEOUS GPU usage (models on the
+            # same sequential lane don't stack).  Fall back to the naive sum if not
+            # provided (e.g. called from outside _process_with_prefetch).
+            total_needed = peak_gpus if peak_gpus is not None else sum(
+                reps * self._get_tp(model)
+                for model, reps in num_replicas_per_model.items()
+            )
             logger.info(
                 f"[GPU-ALLOC] Waiting for GPUs (need {total_needed} free "
                 f"out of {num_gpus} total)..."
@@ -694,8 +699,13 @@ class BatchScheduler:
                 self.autoscaler.register_active_batch(f"{model_name}:vllm", batch_id)
 
         if self.enable_model_grouping:
-            pending_tasks.sort(key=lambda t: t.body.get("model", ""))
-            logger.info(f"Model grouping enabled: tasks sorted by model")
+            if self.forced_group_order:
+                order_map = {m: i for i, m in enumerate(self.forced_group_order)}
+                pending_tasks.sort(key=lambda t: order_map.get(t.body.get("model", ""), 999))
+                logger.info(f"Model grouping enabled: tasks sorted by forced order {self.forced_group_order}")
+            else:
+                pending_tasks.sort(key=lambda t: t.body.get("model", ""))
+                logger.info(f"Model grouping enabled: tasks sorted by model name (alphabetical)")
         else:
             logger.info(f"Model grouping disabled: preserving original task order")
 
@@ -851,7 +861,7 @@ class BatchScheduler:
                     )
 
         # ----- TP=1 lanes -----
-        remaining_gpus = max(1, num_gpus - used_budget)
+        remaining_gpus = num_gpus - used_budget
 
         # Annotate and sort single groups by LPT
         annotated = []
@@ -860,6 +870,32 @@ class BatchScheduler:
             annotated.append((model_name, tasks, i_time + self._MODEL_SWITCH_OVERHEAD_S + p_time))
         annotated.sort(key=lambda x: x[2], reverse=True)
 
+        if remaining_gpus <= 0 and single_groups:
+            # All GPUs consumed by TP lanes — no room for parallel TP=1 lanes.
+            # Append TP=1 groups sequentially into the least-loaded TP lane so
+            # they run after the TP model finishes (once GPUs are freed).
+            logger.info(
+                f"[MULTI-GPU] No free GPUs for TP=1 models "
+                f"(used_budget={used_budget}/{num_gpus}); "
+                f"scheduling TP=1 groups sequentially in TP lane(s)"
+            )
+            for model_name, tasks, total_time in annotated:
+                if tp_lanes:
+                    target = min(tp_lanes, key=lambda l: l[2])
+                    target[1].append((model_name, tasks))
+                    target[2] += total_time
+                    lane_idx = tp_lanes.index(target)
+                    logger.info(
+                        f"[MULTI-GPU] TP=1 model {model_name} → lane {lane_idx} "
+                        f"(sequential after TP={target[0]}, no free GPUs)"
+                    )
+                else:
+                    tp_lanes.append([1, [(model_name, tasks)], total_time])
+                    used_budget += 1
+            single_groups = []
+            annotated = []
+
+        remaining_gpus = max(0, remaining_gpus)
         single_queues: List[List[tuple]] = [[] for _ in range(remaining_gpus)]
         single_loads = [0.0] * remaining_gpus
 
@@ -1035,7 +1071,13 @@ class BatchScheduler:
 
         deployment_id = f"{model}:vllm"
         tp = self._get_tp(model)
-        backend_config = {"tensor_parallel_size": tp} if tp > 1 else None
+        gpu_mem_util = float(os.environ.get("SLLM_GPU_MEM_UTIL", "0.85"))
+        if tp > 1:
+            backend_config = {"tensor_parallel_size": tp,
+                              "gpu_memory_utilization": gpu_mem_util}
+        else:
+            backend_config = {"gpu_memory_utilization": gpu_mem_util}
+        backend_config["enforce_eager"] = True
         deployment = self.database.get_deployment_by_id(deployment_id)
         if not deployment:
             logger.info(f"Auto-creating deployment for {model} (max_replicas={max_replicas}, tp={tp})")
@@ -1108,7 +1150,7 @@ class BatchScheduler:
 
         if num_gpus <= 1:
             # Single GPU: original path — Johnson's Rule on the global queue
-            if self.enable_johnsons_rule and len(groups) > 1:
+            if self.enable_johnsons_rule and not self.forced_group_order and len(groups) > 1:
                 groups = self._apply_johnsons_rule(groups)
             logger.info(
                 f"[PREFETCH] Processing {len(pending_tasks)} tasks "
@@ -1119,11 +1161,22 @@ class BatchScheduler:
             return
 
         # --- Multi-GPU path ---
-        # 1. Assign groups to GPUs (greedy least-load)
-        gpu_queues = self._assign_groups_to_gpus(groups, num_gpus)
+        # 1. Assign groups to GPUs (greedy least-load).
+        #    Exception: when a forced group order is set, honour it exactly by
+        #    placing all groups in a single sequential lane in that order.
+        #    _assign_groups_to_gpus would otherwise reorder by TP and LPT,
+        #    ignoring the forced sequence (breaks JR ordering experiments).
+        if self.forced_group_order:
+            gpu_queues = [groups]
+            logger.info(
+                f"[FORCED-ORDER] Using single lane for forced group order "
+                f"{[g[0] for g in groups]}"
+            )
+        else:
+            gpu_queues = self._assign_groups_to_gpus(groups, num_gpus)
 
         # 2. Per-GPU: apply Johnson's Rule to each queue independently
-        if self.enable_johnsons_rule:
+        if self.enable_johnsons_rule and not self.forced_group_order:
             for i, queue in enumerate(gpu_queues):
                 if len(queue) > 1:
                     gpu_queues[i] = self._apply_johnsons_rule(queue)
@@ -1144,7 +1197,14 @@ class BatchScheduler:
         #    Must happen BEFORE launching GPU queues to avoid deadlock
         #    where leftover replicas block new model deployments.
         batch_id = pending_tasks[0].batch_id if pending_tasks else ""
-        await self._prepare_gpu_allocations(batch_id, num_replicas_per_model, num_gpus)
+        # Peak simultaneous GPU demand: models in the SAME lane run sequentially,
+        # so only count the heaviest model per lane (not the sum of all models).
+        peak_gpus_needed = sum(
+            max(self._get_tp(m) for m, _ in queue)
+            for queue in gpu_queues
+            if queue
+        )
+        await self._prepare_gpu_allocations(batch_id, num_replicas_per_model, num_gpus, peak_gpus=peak_gpus_needed)
 
         # 5. Build shared reference counter for cross-lane eviction safety.
         #    Each lane that has a model increments the counter.  Only the
@@ -1321,11 +1381,17 @@ class BatchScheduler:
         if not os.path.isdir(model_dir):
             return 0
 
-        total = 0
+        # Prefer sllm-store native format (tensor.data_*) if present; fall back
+        # to HuggingFace checkpoint files.  Never double-count both formats.
+        sllm_total = 0
+        hf_total = 0
         for root, _dirs, files in os.walk(model_dir):
             for fname in files:
-                if fname.endswith((".safetensors", ".bin", ".pt", ".gguf")):
-                    total += os.path.getsize(os.path.join(root, fname))
+                if fname.startswith("tensor.data"):
+                    sllm_total += os.path.getsize(os.path.join(root, fname))
+                elif fname.endswith((".safetensors", ".bin", ".pt", ".gguf")):
+                    hf_total += os.path.getsize(os.path.join(root, fname))
+        total = sllm_total if sllm_total > 0 else hf_total
 
         if total > 0:
             self._estimated_model_sizes[model_name] = total
@@ -1433,11 +1499,19 @@ class BatchScheduler:
             else:
                 deployment = self.database.get_deployment_by_id(deployment_id)
                 available_gpus = await self._get_available_gpu_count()
+                tp = self._get_tp(model)
+                bc: dict | None = {"enforce_eager": True}
+                if tp > 1:
+                    bc["tensor_parallel_size"] = tp
+                # Each replica of a TP>1 model occupies `tp` GPUs, so the number
+                # of replicas that fit is floor(available_gpus / tp).
+                replicas = max(1, available_gpus // max(tp, 1))
                 if not deployment:
                     try:
                         self.database.create_deployment(
                             model_name=model, backend="vllm",
-                            min_replicas=0, max_replicas=available_gpus,
+                            min_replicas=0, max_replicas=replicas,
+                            backend_config=bc,
                         )
                     except Exception as e:
                         if "already exists" not in str(e):
@@ -1446,10 +1520,10 @@ class BatchScheduler:
                     # Restore max_replicas after a previous _do_unload set it to 0
                     logger.info(
                         f"[SCALE-UP] {deployment_id}: max_replicas was "
-                        f"{deployment.max_replicas}, raising to {available_gpus}"
+                        f"{deployment.max_replicas}, raising to {replicas}"
                     )
-                    self.database.update_max_replicas(deployment_id, available_gpus)
-                    self.database.update_desired_replicas(deployment_id, available_gpus)
+                    self.database.update_max_replicas(deployment_id, replicas)
+                    self.database.update_desired_replicas(deployment_id, replicas)
 
             result = await self.router.handle_request(
                 payload=task.body,

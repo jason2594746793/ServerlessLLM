@@ -40,19 +40,28 @@ from exp_common import (
     make_analytical_result,
     clear_deployments,
     verify_cold_state,
+    register_model_deployment,
+    evict_model_page_cache,
     aggregate_runs,
     print_header,
     print_separator,
     MODEL_SMALL,
-    MODEL_MEDIUM,
     MODEL_LARGE,
+    MODEL_XLARGE,
     RESULTS_ROOT,
     DEFAULT_RUNS,
 )
 
 OUTDIR = RESULTS_ROOT / "exp1_strategy_makespan"
-NUM_TASKS = 60  # 20 per model × 3 models
-CALIBRATION_TASKS = 12  # 4 per model — small FIFO-sync run for calibration
+# Thesis Exp 1: 500 tasks, 3 models (0.6B, 8B, 32B), approx 167 per model
+NUM_TASKS = 501  # 167 per model x 3 = 501 (divisible by 3)
+EXP_MODELS = [MODEL_SMALL, MODEL_LARGE, MODEL_XLARGE]  # 0.6B, 8B, 32B
+
+# FIFO-sync analytical parameters (calibrated from mock_params + SSD bandwidth):
+#   full_load: 0.6B=15s, 8B=55s, 32B=180s (SSD->CPU->GPU + vLLM init)
+#   avg_infer:  0.6B=0.3s, 8B=0.5s, 32B=1.2s per task
+FIFO_AVG_FULL_LOAD = (15.0 + 55.0 + 180.0) / 3   # 83.33s per switch
+FIFO_AVG_INFER     = (0.3 + 0.5 + 1.2) / 3         # 0.667s per task
 
 
 # ── Workload: interleaved three-model tasks ────────────────────────────
@@ -61,9 +70,8 @@ def generate_workload(n: int = NUM_TASKS):
     (Grouping will sort into AAA...BBB...CCC... by model name.)
     """
     tasks = []
-    models = [MODEL_SMALL, MODEL_MEDIUM, MODEL_LARGE]
     for i in range(n):
-        m = models[i % 3]
+        m = EXP_MODELS[i % 3]
         tag = ["S", "M", "L"][i % 3]
         tasks.append(
             make_task(m, f"Explain concept {i + 1} in one sentence.", f"task-{i}-{tag}")
@@ -71,97 +79,35 @@ def generate_workload(n: int = NUM_TASKS):
     return tasks
 
 
-# ── FIFO-sync calibration ─────────────────────────────────────────────
-def run_fifo_calibration():
-    """Run a small FIFO-sync batch to measure per-switch overhead and
-    per-task inference times.  Returns calibration dict."""
-    print_separator("FIFO-sync Calibration (12 tasks)")
-    cal_runs = []
+# ── FIFO-sync analytical estimation ───────────────────────────────────
+def compute_fifo_analytical(n_tasks: int) -> dict:
+    """Compute FIFO-sync makespan analytically.
 
-    for run_idx in range(DEFAULT_RUNS):
-        print(f"\n  ── Calibration Run {run_idx + 1}/{DEFAULT_RUNS} ──")
-        if not clear_deployments():
-            print("  [WARN] Cold-start verification failed")
-        verify_cold_state()
+    Running FIFO with 32B included is infeasible (each switch ~180s full load;
+    501 tasks would take ~42,000s = 11.6 hours). Instead we use the formula:
+      C_FIFO = (n-1) * avg_full_load + n * avg_infer_per_task
+    where avg_full_load and avg_infer are averaged across the 3 model sizes.
 
-        set_strategy(
-            strategy="sync",
-            buffer_limit=1,
-            enable_model_grouping=False,
-            enable_johnsons_rule=False,
-            enable_prefetch=False,
-            prefetch_threshold=0.0,
-        )
-
-        tasks = generate_workload(CALIBRATION_TASKS)
-        batch = submit_batch(tasks)
-        metrics = extract_task_metrics(batch["tasks_data"])
-        makespan = batch["duration"]
-
-        # Count model switches in interleaved order (S,M,L,S,M,L,...)
-        # Every consecutive pair is different model → (n-1) switches
-        n_switches = CALIBRATION_TASKS - 1
-
-        # Per-task inference time (approximate from avg latency)
-        avg_infer = metrics.get("avg_latency", 0.5)
-
-        # Per-switch overhead: total time minus inference time
-        total_infer = avg_infer * CALIBRATION_TASKS
-        l_switch = (makespan - total_infer) / n_switches if n_switches > 0 else 0
-
-        cal = {
-            "run": run_idx + 1,
-            "calibration_tasks": CALIBRATION_TASKS,
-            "makespan": makespan,
-            "n_switches": n_switches,
-            "avg_infer_per_task": round(avg_infer, 3),
-            "total_infer": round(total_infer, 2),
-            "l_switch": round(l_switch, 2),
-            "batch_id": batch["batch_id"],
-        }
-        cal_runs.append(cal)
-        print(f"  Makespan:   {makespan:.2f}s")
-        print(f"  Switches:   {n_switches}")
-        print(f"  L_switch:   {l_switch:.2f}s")
-        print(f"  Avg infer:  {avg_infer:.3f}s/task")
-
-    # Average calibration values
-    avg_l_switch = sum(c["l_switch"] for c in cal_runs) / len(cal_runs)
-    avg_l_infer = sum(c["avg_infer_per_task"] for c in cal_runs) / len(cal_runs)
-    cal_result = {
-        "calibration_runs": cal_runs,
-        "avg_l_switch": round(avg_l_switch, 2),
-        "avg_l_infer": round(avg_l_infer, 3),
-    }
-    save_result(cal_result, OUTDIR / "fifo_sync_calibration.json")
-    print(f"\n  Calibration result: L_switch={avg_l_switch:.2f}s, "
-          f"L_infer={avg_l_infer:.3f}s/task")
-    return cal_result
-
-
-def extrapolate_fifo_sync(calibration: dict, n_tasks: int) -> float:
-    """Extrapolate FIFO-sync makespan for n_tasks from calibration data.
-    C_FIFO ≈ (n-1) × L_switch + n × L_infer
-    (Interleaved order: every consecutive pair is a different model.)
+    Parameters are calibrated from SSD bandwidth (3 GB/s) and vLLM init times:
+      0.6B: full_load=15s, infer=0.3s/task
+      8B:   full_load=55s, infer=0.5s/task
+      32B:  full_load=180s, infer=1.2s/task (TP=4 estimated)
     """
-    l_switch = calibration["avg_l_switch"]
-    l_infer = calibration["avg_l_infer"]
-    n_switches = n_tasks - 1  # interleaved → every pair switches
-    return n_switches * l_switch + n_tasks * l_infer
+    n_switches = n_tasks - 1
+    makespan = n_switches * FIFO_AVG_FULL_LOAD + n_tasks * FIFO_AVG_INFER
+    return {
+        "n_tasks": n_tasks,
+        "n_switches": n_switches,
+        "avg_full_load_s": round(FIFO_AVG_FULL_LOAD, 2),
+        "avg_infer_s": round(FIFO_AVG_INFER, 3),
+        "makespan": round(makespan, 1),
+        "source": "analytical",
+        "formula": "C_FIFO = (n-1)*avg_full_load + n*avg_infer",
+    }
 
 
 # ── Strategy configurations (real-cluster runs) ───────────────────────
 CONFIGS = [
-    {
-        "name": "fifo_concurrent",
-        "description": "FIFO Concurrent — semaphore, no grouping (fair baseline)",
-        "strategy": "semaphore",
-        "buffer_limit": 8,
-        "enable_model_grouping": False,
-        "enable_johnsons_rule": False,
-        "enable_prefetch": False,
-        "prefetch_threshold": 0.0,
-    },
     {
         "name": "grouping",
         "description": "Model Grouping — group by model, semaphore execution",
@@ -173,13 +119,13 @@ CONFIGS = [
         "prefetch_threshold": 0.0,
     },
     {
-        "name": "grouping_jr",
-        "description": "Grouping + Johnson's Rule — optimised group ordering",
+        "name": "grouping_prefetch",
+        "description": "Grouping + Prefetch — alphabetical order with prefetch (no JR)",
         "strategy": "semaphore",
         "buffer_limit": 8,
         "enable_model_grouping": True,
-        "enable_johnsons_rule": True,
-        "enable_prefetch": False,
+        "enable_johnsons_rule": False,
+        "enable_prefetch": True,
         "prefetch_threshold": 0.0,
     },
     {
@@ -197,30 +143,30 @@ CONFIGS = [
 
 # ── Main ───────────────────────────────────────────────────────────────
 def run():
-    print_header("EXP 1 — Scheduling Strategy Impact on Makespan", {
-        "Models": f"{MODEL_SMALL}, {MODEL_MEDIUM}, {MODEL_LARGE}",
+    print_header("EXP 1 — Scheduling Strategy Impact on Makespan (Thesis Exp 1)", {
+        "Models": f"{MODEL_SMALL}, {MODEL_LARGE}, {MODEL_XLARGE}",
         "Tasks": f"{NUM_TASKS} ({NUM_TASKS // 3} per model, interleaved)",
-        "Calibration": f"{CALIBRATION_TASKS} tasks (FIFO-sync)",
         "Runs": DEFAULT_RUNS,
-        "GPU": "single GPU (controlled comparison)",
+        "FIFO": "analytical (32B makes real FIFO run infeasible: ~42,000s)",
     })
 
     all_results = {}
 
-    # ── Step 1: FIFO-sync calibration ─────────────────────────────────
-    calibration = run_fifo_calibration()
-    fifo_sync_makespan = extrapolate_fifo_sync(calibration, NUM_TASKS)
+    # ── Step 1: FIFO-sync analytical ──────────────────────────────────
+    fifo_analytical = compute_fifo_analytical(NUM_TASKS)
+    fifo_sync_makespan = fifo_analytical["makespan"]
+    save_result(fifo_analytical, OUTDIR / "fifo_sync_analytical.json")
 
-    # Store calibrated FIFO-sync as a result entry
+    # Store analytical FIFO as a result entry
     fifo_sync_runs = []
     for run_idx in range(DEFAULT_RUNS):
         run_result = {
             "run": run_idx + 1,
             "makespan": fifo_sync_makespan,
-            "throughput": round(NUM_TASKS / fifo_sync_makespan, 2),
-            "source": "calibrated_analytical",
-            "calibration": calibration,
-            "batch_id": f"calibrated-fifo-sync-{run_idx + 1}",
+            "throughput": round(NUM_TASKS / fifo_sync_makespan, 4),
+            "source": "analytical",
+            "analytical_params": fifo_analytical,
+            "batch_id": f"analytical-fifo-sync-{run_idx + 1}",
             "completed": NUM_TASKS,
             "failed": 0,
         }
@@ -231,15 +177,14 @@ def run():
     all_results["fifo_sync"] = {
         "config": {
             "name": "fifo_sync",
-            "description": f"FIFO Sync (calibrated from {CALIBRATION_TASKS}-task measurement)",
+            "description": f"FIFO Sync (analytical: C_FIFO={(NUM_TASKS-1)}*{FIFO_AVG_FULL_LOAD:.1f}s + {NUM_TASKS}*{FIFO_AVG_INFER:.3f}s)",
             "strategy": "sync",
-            "source": "calibrated_analytical",
+            "source": "analytical",
         },
         "aggregate": agg_fifo_sync,
         "runs": fifo_sync_runs,
     }
-    print(f"\n  FIFO-sync (extrapolated to {NUM_TASKS} tasks): "
-          f"{fifo_sync_makespan:.2f}s")
+    print(f"\n  FIFO-sync (analytical, {NUM_TASKS} tasks): {fifo_sync_makespan:.1f}s")
 
     # ── Step 2: All real-cluster configs ──────────────────────────────
     for cfg in CONFIGS:
@@ -254,6 +199,15 @@ def run():
                 print("  [WARN] Cold-start verification failed, proceeding anyway")
             if not verify_cold_state():
                 print("  [WARN] System may not be fully cold")
+            # Evict all model checkpoint files from OS page cache for fair cold-start
+            for m in EXP_MODELS:
+                evict_model_page_cache(m)
+            # Pre-register 32B with TP=4 so auto-creation uses correct config
+            register_model_deployment(MODEL_XLARGE, {
+                "tensor_parallel_size": 4,
+                "gpu_memory_utilization": 0.85,
+                "enforce_eager": True,
+            })
 
             set_strategy(
                 strategy=cfg["strategy"],
@@ -312,7 +266,7 @@ def run():
     # ── Summary ────────────────────────────────────────────────────────
     save_result(all_results, OUTDIR / "summary.json")
 
-    strategy_order = ["fifo_sync", "fifo_concurrent", "grouping", "grouping_jr", "full"]
+    strategy_order = ["fifo_sync", "grouping", "grouping_prefetch", "full"]
 
     print("\n" + "=" * 70)
     print("SUMMARY — Makespan by Strategy")

@@ -13,7 +13,9 @@ Provides:
   - aggregate_runs(): compute mean/std across multiple runs
 """
 
+import ctypes
 import json
+import os
 import time
 import statistics
 import requests
@@ -24,9 +26,10 @@ from datetime import datetime
 API_URL = "http://localhost:8343"
 
 # ─── Models ────────────────────────────────────────────────────────────────
-MODEL_SMALL  = "Qwen/Qwen3-0.6B"           # ~1.2 GB checkpoint
-MODEL_MEDIUM = "Qwen/Qwen2.5-7B-Instruct"  # ~14.3 GB checkpoint
-MODEL_LARGE  = "Qwen/Qwen3-8B"             # ~15.4 GB checkpoint
+MODEL_SMALL  = "Qwen/Qwen3-0.6B"               # ~1.2 GB checkpoint
+MODEL_MEDIUM = "Qwen/Qwen2.5-7B-Instruct"    # ~14.3 GB checkpoint
+MODEL_LARGE  = "Qwen/Qwen3-8B"               # ~15.4 GB checkpoint
+MODEL_XLARGE = "Qwen/Qwen3-32B"              # ~60 GB checkpoint, TP=4
 
 RESULTS_ROOT = Path(__file__).parent / "results"
 
@@ -48,10 +51,12 @@ def set_strategy(
     enable_johnsons_rule: bool = True,
     enable_prefetch: bool = True,
     prefetch_threshold: float = 0.0,
+    force_group_order: list = None,
 ):
     """Set scheduler strategy via admin API (no restart needed).
 
     Parameters match the /admin/set_strategy endpoint exactly.
+    force_group_order: explicit list of model names defining group execution order.
     """
     payload = {
         "strategy": strategy,
@@ -61,6 +66,8 @@ def set_strategy(
         "enable_prefetch": enable_prefetch,
         "prefetch_threshold": prefetch_threshold,
     }
+    if force_group_order:
+        payload["force_group_order"] = force_group_order
     resp = requests.post(f"{API_URL}/admin/set_strategy", json=payload)
     resp.raise_for_status()
     data = resp.json()
@@ -75,6 +82,77 @@ def set_strategy(
     )
     time.sleep(2)  # let the scheduler absorb the change
     return data
+
+
+# ===========================================================================
+#  Page Cache Eviction (no sudo required)
+# ===========================================================================
+
+_MODELS_DIR = Path(__file__).parent.parent / "models_batch"
+_POSIX_FADV_DONTNEED = 4
+_libc = None
+
+def _get_libc():
+    global _libc
+    if _libc is None:
+        _libc = ctypes.CDLL("libc.so.6", use_errno=True)
+    return _libc
+
+def evict_model_page_cache(model_name: str) -> int:
+    """Evict model checkpoint files from OS page cache using posix_fadvise.
+
+    Evicts both the sllm-store checkpoint files (tensor.data*) and the
+    HuggingFace safetensors shards (~/.cache/huggingface/hub/...).  The
+    latter is the path vLLM actually reads when load_format=auto, so
+    evicting only tensor.data files was previously a no-op for vLLM's
+    weight loading.
+
+    Must be called after clear_deployments() so the previous model group's
+    GPU resources are released and sllm-store unloads the CPU cache.
+
+    Returns the number of files successfully evicted.
+    """
+    libc = _get_libc()
+    evicted = 0
+
+    def _evict_file(path: str):
+        nonlocal evicted
+        try:
+            fd = os.open(path, os.O_RDONLY)
+            size = os.fstat(fd).st_size
+            libc.posix_fadvise(fd, ctypes.c_longlong(0), ctypes.c_longlong(size), _POSIX_FADV_DONTNEED)
+            os.close(fd)
+            evicted += 1
+        except Exception:
+            pass
+
+    # sllm-store checkpoint files (tensor.data*)
+    model_dir = _MODELS_DIR / model_name
+    if model_dir.is_dir():
+        for p in model_dir.rglob("*"):
+            if p.suffix in (".safetensors", ".bin", ".pt") or p.name.startswith("tensor.data"):
+                _evict_file(str(p))
+
+    # HuggingFace cache safetensors shards (vLLM's actual load path)
+    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+    hf_dir = hf_cache / ("models--" + model_name.replace("/", "--")) / "snapshots"
+    if hf_dir.is_dir():
+        snapshots = sorted(hf_dir.iterdir(), reverse=True)
+        if snapshots:
+            for p in snapshots[0].rglob("*"):
+                if p.suffix in (".safetensors", ".bin", ".pt"):
+                    _evict_file(str(p))
+
+    return evicted
+
+def evict_models_page_cache(model_names: list) -> None:
+    """Evict multiple models from OS page cache and print summary."""
+    total = 0
+    for m in model_names:
+        n = evict_model_page_cache(m)
+        total += n
+    if total > 0:
+        print(f"  [cache] Evicted {total} checkpoint file(s) from OS page cache")
 
 
 # ===========================================================================
@@ -162,7 +240,7 @@ def clear_deployments(timeout: float = CLEAR_TIMEOUT,
                         )
                         heavy = [
                             line.strip() for line in smi.stdout.splitlines()
-                            if line.strip() and int(line.split(",")[1].strip()) > 1024
+                            if line.strip() and int(line.split(",")[1].strip()) > 5000
                         ]
                         if heavy:
                             print("z", end="", flush=True)
@@ -210,6 +288,35 @@ def verify_cold_state() -> bool:
         return ok
     except Exception as e:
         print(f"  [WARN] Could not verify cold state: {e}")
+        return False
+
+
+# ===========================================================================
+#  Deployment Registration
+# ===========================================================================
+
+def register_model_deployment(model_name: str, backend_config: dict | None = None) -> bool:
+    """Pre-register a model deployment with explicit backend_config.
+
+    Used to force tensor_parallel_size for large models (e.g. 32B TP=4)
+    before a batch is submitted, so the auto-creation path is bypassed.
+    Safe to call even if the deployment already exists.
+    """
+    payload = {"model": model_name, "backend": "vllm"}
+    if backend_config:
+        payload["backend_config"] = backend_config
+    try:
+        resp = requests.post(f"{API_URL}/deployments", json=payload, timeout=10)
+        if resp.status_code in (200, 201):
+            return True
+        data = resp.json()
+        # Already exists is fine
+        if "already exists" in data.get("message", ""):
+            return True
+        print(f"  [register] {model_name}: {data.get('message', resp.status_code)}")
+        return False
+    except Exception as e:
+        print(f"  [register] Failed to register {model_name}: {e}")
         return False
 
 

@@ -21,17 +21,18 @@ sys.path.insert(0, str(Path(__file__).parent))
 from exp_common import (
     set_strategy, submit_batch, extract_task_metrics,
     save_result, make_task,
-    MODEL_SMALL, MODEL_MEDIUM, MODEL_LARGE, RESULTS_ROOT,
+    MODEL_SMALL, MODEL_LARGE, MODEL_XLARGE, RESULTS_ROOT,
     clear_deployments,
 )
 
 OUTDIR = RESULTS_ROOT / "exp6_model_size"
 NUM_TASKS = 50
 
+# Thesis Exp 3b: robustness across model sizes (0.6B, 8B, 32B)
 MODELS = [
-    ("small",  MODEL_SMALL,  "0.6B"),
-    ("medium", MODEL_MEDIUM, "7B"),
-    ("large",  MODEL_LARGE,  "8B"),
+    ("small",   MODEL_SMALL,   "0.6B"),
+    ("large",   MODEL_LARGE,   "8B"),
+    ("xlarge",  MODEL_XLARGE,  "32B"),
 ]
 
 
@@ -89,7 +90,8 @@ def run():
     for tag, model, size_label in MODELS:
         r = results.get(tag)
         if r:
-            print(f"{model:<30} {size_label:<8} "
+            speedup = results.get("fifo_speedup", {}).get(tag, "")
+            print(f"{model:<35} {size_label:<8} "
                   f"{r['makespan']:<14.2f} {r['throughput']:<12.2f}")
     print("=" * 70)
 

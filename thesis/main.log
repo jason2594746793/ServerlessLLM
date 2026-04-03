@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  3 APR 2026 21:04
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  3 APR 2026 22:30
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1247,7 +1247,7 @@ Overfull \hbox (90.89082pt too wide) in paragraph at lines 825--839
 [22 <./figure_exp5_scalability.pdf>] [23]
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 897.
+            Default family used instead on input line 896.
 
 (/usr/share/texlive/texmf-dist/tex/latex/microtype/mt-cmr.cfg
 File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman 
@@ -1255,46 +1255,38 @@ File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman
 )
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 897.
+            Default family used instead on input line 896.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 931.
+            Default family used instead on input line 930.
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 931.
+            Default family used instead on input line 930.
 
-Overfull \hbox (7.33029pt too wide) in paragraph at lines 976--977
+Overfull \hbox (7.33029pt too wide) in paragraph at lines 975--976
  [][] 
  []
 
-[24] [25]
-Overfull \hbox (32.3986pt too wide) in paragraph at lines 997--998
-\OT1/ptm/m/n/12 (-20) achieves 131.1$\OMS/pzccm/m/n/12 ^^F$\OT1/ptm/m/n/12 (-20
-) 2.2s, rank-ing 1st among all six per-mu-ta-tions. The al-ter-na-tive 0.6B$\OM
-S/pzccm/m/n/12 !$\OT1/ptm/m/n/12 (-20) 32B$\OMS/pzccm/m/n/12 !$\OT1/ptm/m/n/12 
-(-20) 8B
- []
-
-[26]
-Underfull \hbox (badness 1102) in paragraph at lines 1035--1035
+[24] [25] [26]
+Underfull \hbox (badness 1102) in paragraph at lines 1034--1034
 []\OT1/phv/m/n/12 (+20) Table 5.6: |Stor-age tier com-par-i-son: model load-ing
  break-down for 8B model
  []
 
 
-Overfull \hbox (6.24002pt too wide) in paragraph at lines 1037--1047
+Overfull \hbox (6.24002pt too wide) in paragraph at lines 1036--1046
  [][] 
  []
 
 
-Overfull \hbox (8.26752pt too wide) in paragraph at lines 1054--1064
+Overfull \hbox (8.26752pt too wide) in paragraph at lines 1053--1063
  [][] 
  []
 
 <figure_exp5_storage_tier.pdf, id=911, 715.0872pt x 283.91997pt>
 File: figure_exp5_storage_tier.pdf Graphic file (type pdf)
 <use figure_exp5_storage_tier.pdf>
-Package pdftex.def Info: figure_exp5_storage_tier.pdf  used on input line 1069.
+Package pdftex.def Info: figure_exp5_storage_tier.pdf  used on input line 1068.
 
 (pdftex.def)             Requested size: 391.93546pt x 155.61925pt.
 [27] [28 <./figure_exp5_storage_tier.pdf>]
@@ -1304,7 +1296,7 @@ Chapter 6.
 ] [30] [31]
 Chapter 7.
 
-Overfull \hbox (16.35442pt too wide) in paragraph at lines 1160--1161
+Overfull \hbox (16.35442pt too wide) in paragraph at lines 1159--1160
 \OT1/ptm/m/n/12 (-20) JSONL out-put to ob-ject stor-age, deadline-aware au-tosc
 al-ing ($[] \OT1/ptmcm/m/n/12 = \OMS/pzccm/m/n/12 d\OML/ptmcm/m/it/12 n \OMS/pz
 ccm/m/n/12 ^^A \OML/ptmcm/m/it/12 L[]=T[]\OMS/pzccm/m/n/12 e$\OT1/ptm/m/n/12 (-
@@ -1320,16 +1312,13 @@ Chapter 8.
 ] [35
 
 ] [36] [37]) [38] (./main.aux)
-
-LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
-
 Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: 2BE86A48B0EA1677ED70EF05A4E16A0F;12880.
  ) 
 Here is how much of TeX's memory you used:
  39441 strings out of 478287
  875808 string characters out of 5849289
- 1360812 words of memory out of 5000000
+ 1360368 words of memory out of 5000000
  56183 multiletter control sequences out of 15000+600000
  581058 words of font info for 528 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
@@ -1348,10 +1337,10 @@ t/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type
 l/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive
 /texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (45 pages, 428071 bytes).
+Output written on main.pdf (45 pages, 428234 bytes).
 PDF statistics:
- 1226 PDF objects out of 1440 (max. 8388607)
- 866 compressed objects within 9 object streams
+ 1227 PDF objects out of 1440 (max. 8388607)
+ 867 compressed objects within 9 object streams
  212 named destinations out of 1000 (max. 500000)
  151130 words of extra memory for PDF output out of 154059 (max. 10000000)
 
