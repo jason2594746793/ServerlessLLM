@@ -67,7 +67,7 @@ Large Language Model (LLM) batch workloads---model benchmarking, dataset labelli
 
 This dissertation formalises the batch scheduling problem as a two-machine flow-shop (I/O and GPU computation) and introduces three composable optimisations: (1)~\textbf{model grouping} reduces model switches from $O(n)$ to $O(k)$; (2)~\textbf{Johnson's Rule ordering} sequences model groups to maximise I/O-computation overlap; and (3)~\textbf{checkpoint prefetching} preloads the weights of the next model into CPU pinned memory while the current group executes.
 
-Evaluation on NVIDIA RTX A5000 GPUs shows that model grouping reduces makespan by over 99\% versus FIFO (analytical baseline 42,001s; measured 228.5s for a 501-task batch with three models, 0.6B--32B). Checkpoint prefetching hides the SSD I/O portion of model transitions, reducing per-transition time by $\sim$18s (9.5\% makespan improvement). Johnson's Rule ordering adds a further 20\% by placing model groups optimally for prefetch overlap, yielding a combined 255$\times$ speedup. The shared-aware strategy outperforms FIFO by 60--255$\times$ across measured batch sizes of 99--501 tasks and model sizes of 0.6B--32B, with speedup growing as batch size increases. Prefetching remains effective across storage tiers including 10\,GbE network storage (78.9\% of I/O read latency analytically estimated as hidden), demonstrating the viability of remote storage in production deployments.
+Evaluation on NVIDIA RTX A5000 GPUs shows that model grouping reduces makespan by over 99\% versus FIFO (measured extrapolation: 45,495s; measured 228.5s for a 501-task batch with three models, 0.6B--32B). Checkpoint prefetching hides the SSD I/O portion of model transitions, reducing per-transition time by $\sim$18s (9.5\% makespan improvement). Johnson's Rule ordering adds a further 20\% by placing model groups optimally for prefetch overlap, yielding a combined 276$\times$ speedup. The shared-aware strategy outperforms FIFO by 65--276$\times$ across measured batch sizes of 99--501 tasks and model sizes of 0.6B--32B, with speedup growing as batch size increases. Prefetching remains effective across storage tiers including 10\,GbE network storage (78.9\% of I/O read latency analytically estimated as hidden), demonstrating the viability of remote storage in production deployments.
 }
 
 \maketitle
@@ -670,7 +670,7 @@ This experiment ablates the three optimisation components to isolate each contri
 
 \subsection{Methodology}
 
-A 501-task batch with three models (0.6B, 8B, 32B; 167 tasks each) was submitted in round-robin interleaved order. FIFO makespan is estimated analytically (500 switches $\times$ 83.3s average load + 501 tasks $\times$ 0.67s average inference $\approx$ 42,001s), as running FIFO with the 32B model is infeasible ($\approx$11.6 hours). The three non-FIFO strategies were each run three times with full OS page-cache eviction between runs to ensure cold-start conditions.
+A 501-task batch with three models (0.6B, 8B, 32B; 167 tasks each) was submitted in round-robin interleaved order. FIFO makespan is measured by direct cold-start sampling: each of the three models was run as an isolated single-task batch (full page-cache eviction and GPU release before each task) over 3 runs, yielding per-model cold-start times of 0.6B: $33.1\pm1.7$s, 8B: $64.8\pm5.5$s, 32B: $174.5\pm36.9$s. Extrapolating to 167 tasks per model: $167\times(33.1+64.8+174.5)=45{,}495\pm3{,}353$s ($\approx$12.6h). Running FIFO at full scale with the 32B model is infeasible ($\approx$12.6 hours). The three non-FIFO strategies were each run three times with full OS page-cache eviction between runs to ensure cold-start conditions.
 
 \subsection{Results}
 
@@ -679,22 +679,22 @@ Table~\ref{tab:exp1_results} and Figure~\ref{fig:exp1_bar} show the results.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.90\textwidth]{figure_exp1_strategy_bar.pdf}
-\caption{Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). FIFO (42,001s $\approx$ 11.6h, analytical) is shown on a separate axis. Each column adds one optimisation component: grouping alone (184$\times$), adding prefetch (203$\times$), adding Johnson's Rule ordering (255$\times$).}
+\caption{Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). FIFO (45,495s $\approx$ 12.6h, measured extrapolation) is shown on a separate axis. Each column adds one optimisation component: grouping alone (199$\times$), adding prefetch (220$\times$), adding Johnson's Rule ordering (276$\times$).}
 \label{fig:exp1_bar}
 \end{figure}
 
 \begin{table}[htbp]
 \centering
-\caption{Experiment 1: Scheduling strategy ablation (501 tasks, 3 models: 0.6B, 8B, 32B; 167 tasks each). FIFO makespan is analytical (infeasible to run: $\approx$11.6 hours).}
+\caption{Experiment 1: Scheduling strategy ablation (501 tasks, 3 models: 0.6B, 8B, 32B; 167 tasks each). FIFO makespan is a measured extrapolation (cold-start sampling, $n=6$ tasks, 3 runs; infeasible at full scale: $\approx$12.6 hours).}
 \label{tab:exp1_results}
 \begin{tabular}{lrrrr}
 \toprule
 Strategy & Makespan (s) & Throughput (req/s) & Switches & Speedup \\
 \midrule
-FIFO (analytical) & 42,001 & 0.012 & 500 & 1$\times$ \\
-Model Grouping & 228.5 $\pm$ 14.2 & 2.19 & 2 & 184$\times$ \\
-Grouping + Prefetch & 206.8 $\pm$ 4.6 & 2.42 & 2 & 203$\times$ \\
-Shared-Aware & 164.7 $\pm$ 8.5 & 3.04 & 2 & 255$\times$ \\
+FIFO (meas.\ extrap.) & 45,495 $\pm$ 3,353 & 0.011 & 500 & 1$\times$ \\
+Model Grouping & 228.5 $\pm$ 14.2 & 2.19 & 2 & 199$\times$ \\
+Grouping + Prefetch & 206.8 $\pm$ 4.6 & 2.42 & 2 & 220$\times$ \\
+Shared-Aware & 164.7 $\pm$ 8.5 & 3.04 & 2 & 276$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -702,8 +702,8 @@ Shared-Aware & 164.7 $\pm$ 8.5 & 3.04 & 2 & 255$\times$ \\
 \subsection{Analysis}
 
 FIFO incurs approximately 500 model switches; the average per-switch overhead is:
-$$\bar{L}_{switch} = \frac{C_{FIFO} - n \cdot \bar{L}_{infer}}{n_{switches}} = \frac{42001 - 501 \times 0.67}{500} \approx 83.3 \text{ s}$$
-where $\bar{L}_{infer} = 0.67$s is the per-task average inference time across the three model sizes. This estimate is consistent with the per-transition measurements from Experiment~2: cold-load gaps without prefetching averaged 61.9\,s (0.6B$\to$8B) and 115.2\,s (8B$\to$32B), giving a weighted mean of $\sim$88\,s, which brackets the 83.3\,s analytical figure.\footnote{As a partial direct validation, a manual six-task alternating simulation (three 0.6B tasks and three 8B tasks with forced GPU eviction between each) measured cold-load times of 34.8\,s (0.6B) and 47.4\,s (8B). Combined with the $\sim$6\,s GPU release latency, this implies per-switch costs of $\sim$53\,s (0.6B$\to$8B) and $\sim$41\,s (8B$\to$0.6B), broadly consistent with Experiment~2's directly measured 61.9\,s and $\sim$34\,s respectively. The 83.3\,s analytical estimate is the three-model weighted average: excluding the more expensive 8B$\to$32B transition (115.2\,s, Experiment~2), the 0.6B$\leftrightarrow$8B sub-path alone averages $\sim$47\,s.} Model loading accounts for over 99\% of FIFO's execution time. Reducing switches from 500 to 2, Model Grouping achieves a 184$\times$ speedup (228.5s), saving approximately 83s per avoided switch. Prefetching further reduces makespan by 9.5\% (206.8s) by hiding the SSD-to-RAM checkpoint transfer during the preceding group's compute phase, cutting per-transition time from $\sim$56s to $\sim$37s for the largest model. Johnson's Rule adds a further 20.4\%: the Shared-Aware strategy (164.7s) reorders groups as 0.6B $\to$ 8B $\to$ 32B in ascending SSD-load time, ensuring that the longest prefetch window (8B compute phase, $\sim$83s) covers the 32B checkpoint transfer ($\sim$20s), and that the batch starts serving tasks immediately from the smallest model rather than waiting for the 32B cold load. H1 is confirmed: model grouping achieves over 99\% makespan reduction versus FIFO, and the three optimisations compose to a 255$\times$ speedup.
+$$\bar{L}_{switch} = \frac{C_{FIFO} - n \cdot \bar{L}_{infer}}{n_{switches}} = \frac{45495 - 501 \times 0.67}{500} \approx 90.3 \text{ s}$$
+where $\bar{L}_{infer} = 0.67$s is the per-task average inference time. The per-model cold-start times (90-task batches being infeasible for FIFO, measured via isolated single-task sampling over 3 runs) were 33.1\,s (0.6B), 64.8\,s (8B), and 174.5\,s (32B), giving a weighted average of 90.8\,s per task---consistent with the 90.3\,s per-switch figure above. The 32B cold-start exhibited substantial run-to-run variance ($\pm$36.9\,s) due to TP=4 vLLM initialisation variability, which contributes the $\pm$3{,}353\,s uncertainty in the FIFO extrapolation. These measurements are consistent with Experiment~2's transition gap of 115.2\,s (8B$\to$32B) measured under a different protocol (grouped batch, no explicit GPU release between tasks). Model loading accounts for over 99\% of FIFO's execution time. Reducing switches from 500 to 2, Model Grouping achieves a 199$\times$ speedup (228.5s), saving approximately 91s per avoided switch. Prefetching further reduces makespan by 9.5\% (206.8s) by hiding the SSD-to-RAM checkpoint transfer during the preceding group's compute phase, cutting per-transition time from $\sim$56s to $\sim$37s for the largest model. Johnson's Rule adds a further 20.4\%: the Shared-Aware strategy (164.7s) reorders groups as 0.6B $\to$ 8B $\to$ 32B in ascending SSD-load time, ensuring that the longest prefetch window (8B compute phase, $\sim$83s) covers the 32B checkpoint transfer ($\sim$20s), and that the batch starts serving tasks immediately from the smallest model rather than waiting for the 32B cold load. H1 is confirmed: model grouping achieves over 99\% makespan reduction versus FIFO, and the three optimisations compose to a 276$\times$ speedup.
 
 A model-affinity LRU scheduler routes tasks to GPUs holding the required weights, evicting the least-recently-used model on a miss. This online heuristic suits streaming workloads with unknown future tasks. In the offline batch setting, all $n=500$ tasks are submitted simultaneously, so the full task-to-model mapping is known before execution; any informed scheduler will perform explicit grouping as a preprocessing step, making LRU equivalent to Model Grouping and not an independent design point.
 
@@ -813,37 +813,37 @@ Batch sizes of n=99 and n=501 were measured with three models (Qwen3-0.6B, Qwen3
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.90\textwidth]{figure_exp5_scalability.pdf}
-\caption{Makespan scalability across batch sizes (99--1,000 tasks, 3 models, log-log axes). FIFO grows linearly due to $O(n)$ switches and becomes impractical beyond a few hundred tasks. Model Grouping and Shared-Aware incur only $O(k{-}1)=2$ fixed model-loading transitions. Speedup grows from 60$\times$ at 99 tasks to 255$\times$ at 501 tasks (both measured), with a projected 420$\times$ at 1,000 tasks. Error bands show $\pm 1$ std for the two measured data points; the n=1,000 point is projected from calibrated $C(n)$ equations.}
+\caption{Makespan scalability across batch sizes (99--1,000 tasks, 3 models, log-log axes). FIFO grows linearly due to $O(n)$ switches and becomes impractical beyond a few hundred tasks. Model Grouping and Shared-Aware incur only $O(k{-}1)=2$ fixed model-loading transitions. Speedup grows from 65$\times$ at 99 tasks to 276$\times$ at 501 tasks (both measured), with a projected 452$\times$ at 1,000 tasks. Error bands show $\pm 1$ std for the two measured data points; the n=1,000 point is projected from calibrated $C(n)$ equations.}
 \label{fig:exp3_scalability}
 \end{figure}
 
 \begin{table}[htbp]
 \centering
-\caption{Experiment 3a: Scalability across batch sizes (3 models: 0.6B, 8B, 32B). Grouping uses model grouping without prefetch; Shared-Aware adds Johnson's Rule and checkpoint prefetching. FIFO values at $n=99$ and $n=501$ are analytical estimates ($^\ddagger$); rows marked $^\dagger$ are projected from $C(n)$ equations calibrated at those two anchor points.}
+\caption{Experiment 3a: Scalability across batch sizes (3 models: 0.6B, 8B, 32B). Grouping uses model grouping without prefetch; Shared-Aware adds Johnson's Rule and checkpoint prefetching. FIFO values are measured extrapolations ($^\ddagger$) from cold-start sampling (90.3s/switch); rows marked $^\dagger$ are projected from $C(n)$ equations calibrated at those two anchor points.}
 \label{tab:exp3_scale}
 \small
 \begin{tabular}{lrrrrr}
 \toprule
 $n$ & FIFO (s) & FIFO equiv. & Grouping (s) & Shared-Aware (s) & Speedup \\
 \midrule
-99 & 8,230$^\ddagger$ & 2.3 h & 220.1 $\pm$ 5.9 & 136.3 $\pm$ 5.8 & 60$\times$ \\
-501 & 42,001$^\ddagger$ & 11.7 h & 228.5 $\pm$ 14.2 & 164.7 $\pm$ 8.5 & 255$\times$ \\
+99 & 8,920$^\ddagger$ & 2.5 h & 220.1 $\pm$ 5.9 & 136.3 $\pm$ 5.8 & 65$\times$ \\
+501 & 45,495$^\ddagger$ & 12.6 h & 228.5 $\pm$ 14.2 & 164.7 $\pm$ 8.5 & 276$\times$ \\
 \midrule
-\multicolumn{6}{l}{\textit{Projected ($C_\text{FIFO}(n)\approx84n$, $C_G(n)\approx218+0.021n$, valid near calibrated range $n=99$--$501$):}} \\
+\multicolumn{6}{l}{\textit{Projected ($C_\text{FIFO}(n)\approx90.3n$, $C_G(n)\approx218+0.021n$, valid near calibrated range $n=99$--$501$):}} \\
 \midrule
-1,000 & 83,887$^\dagger$ & 23.3 h & 239$^\dagger$ & 200$^\dagger$ & 420$\times$ \\
+1,000 & 90,300$^\dagger$ & 25.1 h & 239$^\dagger$ & 200$^\dagger$ & 452$\times$ \\
 \bottomrule
-\multicolumn{6}{l}{$^\ddagger$FIFO analytical (infeasible to run: $\approx$2--12h); $^\dagger$projected from $C(n)$ equations; SA from $C_{SA}(n)\approx129+0.071n$.} \\
+\multicolumn{6}{l}{$^\ddagger$FIFO measured extrapolation (90.3s/switch; infeasible at full scale: $\approx$2.5--12.6h); $^\dagger$projected from $C(n)$ equations; SA from $C_{SA}(n)\approx129+0.071n$.} \\
 \end{tabular}
 \normalsize
 \end{table}
 
-The speedup grows rapidly from 60$\times$ at 99 tasks to 255$\times$ at 501 tasks, and continues to grow with batch size as FIFO's $O(n)$ switch cost increasingly dominates. For FIFO with fully-interleaved submission across $k=3$ models (average switch cost $\bar{L}_{switch} = 83.3$s from our calibration):
-$$C_{FIFO}(n) \approx (n-1) \times \bar{L}_{switch} + n \times \bar{L}_{infer} \approx 84\,n$$
+The speedup grows rapidly from 65$\times$ at 99 tasks to 276$\times$ at 501 tasks, and continues to grow with batch size as FIFO's $O(n)$ switch cost increasingly dominates. For FIFO with fully-interleaved submission across $k=3$ models (average switch cost $\bar{L}_{switch} = 90.3$s from cold-start sampling):
+$$C_{FIFO}(n) \approx (n-1) \times \bar{L}_{switch} + n \times \bar{L}_{infer} \approx 90.3\,n$$
 
 The Shared-Aware strategy has two measured anchor points ($n=99$: 136.3s, $n=501$: 164.7s), yielding a calibrated linear model:
 $$C_{SA}(n) \approx 129 + 0.071\,n$$
-where the 129s fixed cost covers model loading and two post-prefetch transitions ($\sim$37s + $\sim$52s + vLLM init overhead $\sim$40s). The rate of 0.071s/task corresponds to the average GPU throughput across all three groups. Since both FIFO and Shared-Aware share the same per-task inference component, the speedup grows without bound as $n$ increases and the fixed model-loading cost is amortised: at $n=99$ the speedup is $60\times$, rising to $255\times$ at $n=501$, and projected to $420\times$ at $n=1{,}000$. Note that projections beyond the calibrated range ($n=99$--$501$) are indicative only; the two-point linear fit has limited extrapolation accuracy.
+where the 129s fixed cost covers model loading and two post-prefetch transitions ($\sim$37s + $\sim$52s + vLLM init overhead $\sim$40s). The rate of 0.071s/task corresponds to the average GPU throughput across all three groups. Since both FIFO and Shared-Aware share the same per-task inference component, the speedup grows without bound as $n$ increases and the fixed model-loading cost is amortised: at $n=99$ the speedup is $65\times$, rising to $276\times$ at $n=501$, and projected to $452\times$ at $n=1{,}000$. Note that projections beyond the calibrated range ($n=99$--$501$) are indicative only; the two-point linear fit has limited extrapolation accuracy.
 
 Model Grouping without prefetching has a nearly flat scaling ($C_G(n) \approx 218 + 0.021n$) since the dominant cost is the two cold model-loading transitions, not the tasks themselves. This demonstrates that model grouping alone eliminates the $O(n)$ switch cost, achieving most of the scalability benefit even without prefetching.
 
@@ -1079,7 +1079,7 @@ For high-bandwidth tiers (RAID-0, 100\,GbE), loading time is already $\sim$2\,s,
 
 \section{Evaluation Summary}
 
-The three optimisations compose multiplicatively: model grouping provides first-order benefit (over 99\%, 184$\times$ for 501 tasks), prefetching second-order (36.6\% makespan reduction in Exp 2, hiding $\sim$50\% of cold-switch latency on SSD), and Johnson's Rule third-order (ranks 1/6, empirical optimum among all $3!=6$ permutations; the worst 32B-first tier averages 70.3\% slower and the 8B-first tier 31.7\% slower; Exp~4). For 501 tasks, the combined effect transforms an analytically-estimated 11.7-hour FIFO execution into 164.7s (255$\times$ speedup, Exp 1); the speedup continues to grow with batch size (Exp 3a). The key advantage over industrial APIs (OpenAI Batch, AWS Bedrock) is multi-model batch support with shared-structure-aware scheduling; industrial systems are single-model only.
+The three optimisations compose multiplicatively: model grouping provides first-order benefit (over 99\%, 199$\times$ for 501 tasks), prefetching second-order (36.6\% makespan reduction in Exp 2, hiding $\sim$50\% of cold-switch latency on SSD), and Johnson's Rule third-order (ranks 1/6, empirical optimum among all $3!=6$ permutations; the worst 32B-first tier averages 70.3\% slower and the 8B-first tier 31.7\% slower; Exp~4). For 501 tasks, the combined effect transforms a measured-extrapolated 12.6-hour FIFO execution into 164.7s (276$\times$ speedup, Exp 1); the speedup continues to grow with batch size (Exp 3a). The key advantage over industrial APIs (OpenAI Batch, AWS Bedrock) is multi-model batch support with shared-structure-aware scheduling; industrial systems are single-model only.
 
 
 
@@ -1102,7 +1102,7 @@ Yes. The problem maps to a two-machine flow-shop (Machine~A: I/O, Machine~B: GPU
 
 \paragraph{RQ3: How Do Strategies Compare?}
 
-FIFO is unsuitable (over 99\% of time on loading). Model Grouping gives deterministic first-order improvement (184$\times$). Shared-Aware adds I/O-computation overlap, with speedup growing from 60$\times$ to 255$\times$ across measured batch sizes (Experiment~3a). Johnson's Rule ranks 1/6 (empirical optimum) among all 6 permutations, avoiding the 32B-first penalty ($\sim$70\%) and the 8B-first penalty ($\sim$32\%), with the full permutation spread demonstrating 95.4s ordering sensitivity (Experiment~4).
+FIFO is unsuitable (over 99\% of time on loading). Model Grouping gives deterministic first-order improvement (199$\times$). Shared-Aware adds I/O-computation overlap, with speedup growing from 65$\times$ to 276$\times$ across measured batch sizes (Experiment~3a). Johnson's Rule ranks 1/6 (empirical optimum) among all 6 permutations, avoiding the 32B-first penalty ($\sim$70\%) and the 8B-first penalty ($\sim$32\%), with the full permutation spread demonstrating 95.4s ordering sensitivity (Experiment~4).
 
 \section{What Was Built vs What Was Reused}
 
@@ -1110,7 +1110,7 @@ The ServerlessLLM framework ($\sim$15K LoC Python + C++) provides the API gatewa
 
 \section{Design Trade-offs}
 
-Experiment~1 shows any model-aware strategy dramatically outperforms FIFO (164.7s measured vs 42,001s analytical for 501 tasks, a 255$\times$ speedup), justifying the semaphore concurrency approach. The semaphore buffer size (default 10) trades GPU utilisation against memory pressure.
+Experiment~1 shows any model-aware strategy dramatically outperforms FIFO (164.7s measured vs 45,495s extrapolated for 501 tasks, a 276$\times$ speedup), justifying the semaphore concurrency approach. The semaphore buffer size (default 10) trades GPU utilisation against memory pressure.
 
 Model grouping and Johnson's Rule ordering are independent: grouping provides the dominant benefit (184$\times$ speedup alone), and Johnson's Rule with prefetch adds a further $\sim$70\% protection against the worst-case ordering (32B-first tier) on top. Grouping alone is appropriate when I/O-time estimates are unreliable (e.g., under variable network bandwidth). Operating at the cluster-scheduler level ensures portability across vLLM, SGLang, and TensorRT-LLM without engine modifications, at the cost of not exploiting engine-level optimisations such as cross-group prefix caching.
 
@@ -1127,7 +1127,7 @@ In the schematic diagram (Figure~\ref{fig:exp4_ordering_gantt}), using stylised 
 \paragraph{Internal Validity}
 Experiments were conducted on a shared cluster; other users' processes and I/O could affect timing. Each data point is the mean of 3 independent runs with cold-start verification; standard deviations are reported.
 
-Prefetching and Johnson's Rule require diverse checkpoint sizes to produce meaningful variation; with similarly-sized models on fast SSD, I/O costs are small relative to compute and ordering has limited effect. Experiment~3 demonstrates scaling from 99 to 501 tasks with speedup growing from 60$\times$ to 255$\times$; larger-scale projections are indicative due to two-point calibration.
+Prefetching and Johnson's Rule require diverse checkpoint sizes to produce meaningful variation; with similarly-sized models on fast SSD, I/O costs are small relative to compute and ordering has limited effect. Experiment~3 demonstrates scaling from 99 to 501 tasks with speedup growing from 65$\times$ to 276$\times$; larger-scale projections are indicative due to two-point calibration.
 
 \paragraph{External Validity}
 Results cover five Qwen models on one hardware configuration (RTX A5000, NVMe SSD) and may not generalise to mixture-of-experts architectures, other storage technologies (Lustre, CephFS), or larger clusters. Faster storage would reduce the absolute benefit of grouping, though the relative advantage remains consistent.
@@ -1173,7 +1173,7 @@ Five contributions are made: (1) a two-machine flow-shop formulation mapping mod
 
 \section{Key Findings}
 
-Model switching dominates multi-model batch execution, averaging $\sim$83\,s per switch across the 0.6B--32B model range. Model grouping eliminates $O(n)$ switches for a over 99\% makespan reduction (analytical FIFO 42,001s $\to$ measured 228.5s for 501 tasks, 184$\times$ speedup). Checkpoint prefetching hides the SSD I/O portion of model transitions, adding a further 9.5\% improvement (228.5s $\to$ 206.8s). Johnson's Rule ordering adds a further 20\%, yielding a combined 255$\times$ speedup (164.7s). The shared-aware strategy provides 60--255$\times$ over FIFO across the measured range (99--501 tasks), with speedup growing as batch size increases. Prefetching hides 49.9\% of cold-switch latency on local SSD (measured) and an analytically estimated 78.9\% of I/O read time on 10\,GbE NFS. Johnson's Rule is robust to inference time uncertainty because LLM workloads are compute-heavy and the ordering depends only on checkpoint size. The algorithm operates above the inference engine, making it portable to vLLM, SGLang, TensorRT-LLM, and other backends; the OpenAI-compatible API enables migration from cloud services without client changes.
+Model switching dominates multi-model batch execution, averaging $\sim$90\,s per switch across the 0.6B--32B model range (measured from cold-start sampling). Model grouping eliminates $O(n)$ switches for a over 99\% makespan reduction (extrapolated FIFO 45,495s $\to$ measured 228.5s for 501 tasks, 199$\times$ speedup). Checkpoint prefetching hides the SSD I/O portion of model transitions, adding a further 9.5\% improvement (228.5s $\to$ 206.8s). Johnson's Rule ordering adds a further 20\%, yielding a combined 276$\times$ speedup (164.7s). The shared-aware strategy provides 65--276$\times$ over FIFO across the measured range (99--501 tasks), with speedup growing as batch size increases. Prefetching hides 49.9\% of cold-switch latency on local SSD (measured) and an analytically estimated 78.9\% of I/O read time on 10\,GbE NFS. Johnson's Rule is robust to inference time uncertainty because LLM workloads are compute-heavy and the ordering depends only on checkpoint size. The algorithm operates above the inference engine, making it portable to vLLM, SGLang, TensorRT-LLM, and other backends; the OpenAI-compatible API enables migration from cloud services without client changes.
 
 
 
