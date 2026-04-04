@@ -17,61 +17,61 @@
 \contentsline {section}{\numberline {2.10}Data-Locality and Model-Aware Scheduling}{7}{section.2.10}%
 \contentsline {section}{\numberline {2.11}Prefetching and Pipelining}{7}{section.2.11}%
 \contentsline {section}{\numberline {2.12}Summary and Research Gap}{7}{section.2.12}%
-\contentsline {chapter}{\numberline {3}Design and Implementation}{8}{chapter.3}%
-\contentsline {section}{\numberline {3.1}System Architecture Overview}{8}{section.3.1}%
-\contentsline {section}{\numberline {3.2}Problem Definition}{8}{section.3.2}%
-\contentsline {section}{\numberline {3.3}Problem Analysis: Shared Structure in Batches}{11}{section.3.3}%
-\contentsline {section}{\numberline {3.4}Shared-Aware Scheduling Algorithm}{11}{section.3.4}%
-\contentsline {subsection}{\numberline {3.4.1}Phase 1: Model Grouping}{11}{subsection.3.4.1}%
-\contentsline {subsection}{\numberline {3.4.2}Phase 2: Johnson's Rule Ordering}{11}{subsection.3.4.2}%
-\contentsline {subsection}{\numberline {3.4.3}Phase 3: Worker Allocation}{12}{subsection.3.4.3}%
-\contentsline {subsection}{\numberline {3.4.4}Baseline Strategies}{13}{subsection.3.4.4}%
-\contentsline {section}{\numberline {3.5}Checkpoint Prefetching Mechanism}{14}{section.3.5}%
-\contentsline {subsection}{\numberline {3.5.1}Prefetching Pipeline}{14}{subsection.3.5.1}%
-\contentsline {subsection}{\numberline {3.5.2}Design Analysis: Prefetching Across Storage Tiers}{14}{subsection.3.5.2}%
-\contentsline {chapter}{\numberline {4}Evaluation}{15}{chapter.4}%
-\contentsline {paragraph}{\numberline {4.0.0.0.1}Hypotheses.}{15}{paragraph.4.0.0.0.1}%
-\contentsline {section}{\numberline {4.1}Experimental Setup}{15}{section.4.1}%
-\contentsline {paragraph}{\numberline {4.1.0.0.1}Models Tested}{15}{paragraph.4.1.0.0.1}%
-\contentsline {paragraph}{\numberline {4.1.0.0.2}Baseline Strategies}{16}{paragraph.4.1.0.0.2}%
-\contentsline {paragraph}{\numberline {4.1.0.0.3}Metrics}{16}{paragraph.4.1.0.0.3}%
-\contentsline {section}{\numberline {4.2}Experiment 1: Scheduling Strategy Impact on Makespan}{16}{section.4.2}%
-\contentsline {subsection}{\numberline {4.2.1}Methodology}{16}{subsection.4.2.1}%
-\contentsline {subsection}{\numberline {4.2.2}Results}{16}{subsection.4.2.2}%
-\contentsline {subsection}{\numberline {4.2.3}Analysis}{18}{subsection.4.2.3}%
-\contentsline {section}{\numberline {4.3}Experiment 2: Checkpoint Prefetching Effectiveness}{18}{section.4.3}%
-\contentsline {subsection}{\numberline {4.3.1}Methodology}{18}{subsection.4.3.1}%
-\contentsline {subsection}{\numberline {4.3.2}Results}{18}{subsection.4.3.2}%
-\contentsline {subsection}{\numberline {4.3.3}Analysis}{19}{subsection.4.3.3}%
-\contentsline {section}{\numberline {4.4}Experiment 3: Scalability and Robustness}{20}{section.4.4}%
-\contentsline {subsection}{\numberline {4.4.1}Scaling with Batch Size}{20}{subsection.4.4.1}%
-\contentsline {section}{\numberline {4.5}Experiment 4: Johnson's Rule Ordering Ablation}{21}{section.4.5}%
-\contentsline {subsection}{\numberline {4.5.1}Methodology}{21}{subsection.4.5.1}%
-\contentsline {subsection}{\numberline {4.5.2}Results}{22}{subsection.4.5.2}%
-\contentsline {subsection}{\numberline {4.5.3}Analysis}{22}{subsection.4.5.3}%
-\contentsline {subsection}{\numberline {4.5.4}Regime Sensitivity: Task-Count Variation}{24}{subsection.4.5.4}%
-\contentsline {section}{\numberline {4.6}Experiment 5: Storage Tier Impact on Prefetching}{25}{section.4.6}%
-\contentsline {subsection}{\numberline {4.6.1}Methodology}{25}{subsection.4.6.1}%
-\contentsline {subsection}{\numberline {4.6.2}Results}{25}{subsection.4.6.2}%
-\contentsline {subsection}{\numberline {4.6.3}Analysis}{26}{subsection.4.6.3}%
-\contentsline {section}{\numberline {4.7}Evaluation Summary}{26}{section.4.7}%
-\contentsline {chapter}{\numberline {5}Discussion}{27}{chapter.5}%
-\contentsline {section}{\numberline {5.1}Answering the Research Questions}{27}{section.5.1}%
-\contentsline {paragraph}{\numberline {5.1.0.0.1}RQ1: How to Discover and Exploit Shared Structure?}{27}{paragraph.5.1.0.0.1}%
-\contentsline {paragraph}{\numberline {5.1.0.0.2}RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}{27}{paragraph.5.1.0.0.2}%
-\contentsline {paragraph}{\numberline {5.1.0.0.3}RQ3: How Do Strategies Compare?}{27}{paragraph.5.1.0.0.3}%
-\contentsline {section}{\numberline {5.2}What Was Built vs What Was Reused}{27}{section.5.2}%
-\contentsline {section}{\numberline {5.3}Design Trade-offs}{28}{section.5.3}%
-\contentsline {section}{\numberline {5.4}Algorithm Limitations}{28}{section.5.4}%
-\contentsline {section}{\numberline {5.5}Threats to Validity}{29}{section.5.5}%
-\contentsline {paragraph}{\numberline {5.5.0.0.1}Internal Validity}{29}{paragraph.5.5.0.0.1}%
-\contentsline {paragraph}{\numberline {5.5.0.0.2}External Validity}{29}{paragraph.5.5.0.0.2}%
-\contentsline {paragraph}{\numberline {5.5.0.0.3}Construct Validity}{29}{paragraph.5.5.0.0.3}%
-\contentsline {chapter}{\numberline {6}Future Work}{30}{chapter.6}%
-\contentsline {section}{\numberline {6.1}Inference-Level Extensions: Prefix-Aware Ordering and Multi-LoRA}{30}{section.6.1}%
-\contentsline {section}{\numberline {6.2}Storage Extensions: Adaptive and Network-Aware Prefetching}{30}{section.6.2}%
-\contentsline {section}{\numberline {6.3}Production Readiness: Scalability and Engine Abstraction}{30}{section.6.3}%
-\contentsline {chapter}{\numberline {7}Conclusion}{32}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Contributions}{32}{section.7.1}%
-\contentsline {section}{\numberline {7.2}Key Findings}{32}{section.7.2}%
-\contentsline {chapter}{Bibliography}{33}{chapter*.20}%
+\contentsline {chapter}{\numberline {3}Design and Implementation}{10}{chapter.3}%
+\contentsline {section}{\numberline {3.1}System Architecture Overview}{10}{section.3.1}%
+\contentsline {section}{\numberline {3.2}Problem Definition}{10}{section.3.2}%
+\contentsline {section}{\numberline {3.3}Problem Analysis: Shared Structure in Batches}{13}{section.3.3}%
+\contentsline {section}{\numberline {3.4}Shared-Aware Scheduling Algorithm}{13}{section.3.4}%
+\contentsline {subsection}{\numberline {3.4.1}Phase 1: Model Grouping}{13}{subsection.3.4.1}%
+\contentsline {subsection}{\numberline {3.4.2}Phase 2: Johnson's Rule Ordering}{13}{subsection.3.4.2}%
+\contentsline {subsection}{\numberline {3.4.3}Phase 3: Worker Allocation}{14}{subsection.3.4.3}%
+\contentsline {subsection}{\numberline {3.4.4}Baseline Strategies}{15}{subsection.3.4.4}%
+\contentsline {section}{\numberline {3.5}Checkpoint Prefetching Mechanism}{16}{section.3.5}%
+\contentsline {subsection}{\numberline {3.5.1}Prefetching Pipeline}{16}{subsection.3.5.1}%
+\contentsline {subsection}{\numberline {3.5.2}Design Analysis: Prefetching Across Storage Tiers}{16}{subsection.3.5.2}%
+\contentsline {chapter}{\numberline {4}Evaluation}{17}{chapter.4}%
+\contentsline {paragraph}{\numberline {4.0.0.0.1}Hypotheses.}{17}{paragraph.4.0.0.0.1}%
+\contentsline {section}{\numberline {4.1}Experimental Setup}{17}{section.4.1}%
+\contentsline {paragraph}{\numberline {4.1.0.0.1}Models Tested}{17}{paragraph.4.1.0.0.1}%
+\contentsline {paragraph}{\numberline {4.1.0.0.2}Baseline Strategies}{18}{paragraph.4.1.0.0.2}%
+\contentsline {paragraph}{\numberline {4.1.0.0.3}Metrics}{18}{paragraph.4.1.0.0.3}%
+\contentsline {section}{\numberline {4.2}Experiment 1: Scheduling Strategy Impact on Makespan}{18}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}Methodology}{18}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {4.2.2}Results}{18}{subsection.4.2.2}%
+\contentsline {subsection}{\numberline {4.2.3}Analysis}{20}{subsection.4.2.3}%
+\contentsline {section}{\numberline {4.3}Experiment 2: Checkpoint Prefetching Effectiveness}{20}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Methodology}{20}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Results}{20}{subsection.4.3.2}%
+\contentsline {subsection}{\numberline {4.3.3}Analysis}{21}{subsection.4.3.3}%
+\contentsline {section}{\numberline {4.4}Experiment 3: Scalability and Robustness}{22}{section.4.4}%
+\contentsline {subsection}{\numberline {4.4.1}Scaling with Batch Size}{22}{subsection.4.4.1}%
+\contentsline {section}{\numberline {4.5}Experiment 4: Johnson's Rule Ordering Ablation}{23}{section.4.5}%
+\contentsline {subsection}{\numberline {4.5.1}Methodology}{23}{subsection.4.5.1}%
+\contentsline {subsection}{\numberline {4.5.2}Results}{24}{subsection.4.5.2}%
+\contentsline {subsection}{\numberline {4.5.3}Analysis}{24}{subsection.4.5.3}%
+\contentsline {subsection}{\numberline {4.5.4}Regime Sensitivity: Task-Count Variation}{26}{subsection.4.5.4}%
+\contentsline {section}{\numberline {4.6}Experiment 5: Storage Tier Impact on Prefetching}{27}{section.4.6}%
+\contentsline {subsection}{\numberline {4.6.1}Methodology}{27}{subsection.4.6.1}%
+\contentsline {subsection}{\numberline {4.6.2}Results}{27}{subsection.4.6.2}%
+\contentsline {subsection}{\numberline {4.6.3}Analysis}{28}{subsection.4.6.3}%
+\contentsline {section}{\numberline {4.7}Evaluation Summary}{28}{section.4.7}%
+\contentsline {chapter}{\numberline {5}Discussion}{29}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Answering the Research Questions}{29}{section.5.1}%
+\contentsline {paragraph}{\numberline {5.1.0.0.1}RQ1: How to Discover and Exploit Shared Structure?}{29}{paragraph.5.1.0.0.1}%
+\contentsline {paragraph}{\numberline {5.1.0.0.2}RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}{29}{paragraph.5.1.0.0.2}%
+\contentsline {paragraph}{\numberline {5.1.0.0.3}RQ3: How Do Strategies Compare?}{29}{paragraph.5.1.0.0.3}%
+\contentsline {section}{\numberline {5.2}What Was Built vs What Was Reused}{29}{section.5.2}%
+\contentsline {section}{\numberline {5.3}Design Trade-offs}{30}{section.5.3}%
+\contentsline {section}{\numberline {5.4}Algorithm Limitations}{30}{section.5.4}%
+\contentsline {section}{\numberline {5.5}Threats to Validity}{31}{section.5.5}%
+\contentsline {paragraph}{\numberline {5.5.0.0.1}Internal Validity}{31}{paragraph.5.5.0.0.1}%
+\contentsline {paragraph}{\numberline {5.5.0.0.2}External Validity}{31}{paragraph.5.5.0.0.2}%
+\contentsline {paragraph}{\numberline {5.5.0.0.3}Construct Validity}{31}{paragraph.5.5.0.0.3}%
+\contentsline {chapter}{\numberline {6}Future Work}{32}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Inference-Level Extensions: Prefix-Aware Ordering and Multi-LoRA}{32}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Storage Extensions: Adaptive and Network-Aware Prefetching}{32}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Production Readiness: Scalability and Engine Abstraction}{32}{section.6.3}%
+\contentsline {chapter}{\numberline {7}Conclusion}{34}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Contributions}{34}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Key Findings}{34}{section.7.2}%
+\contentsline {chapter}{Bibliography}{35}{chapter*.21}%

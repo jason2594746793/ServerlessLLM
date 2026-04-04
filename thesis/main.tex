@@ -256,9 +256,64 @@ OS-level prefetching uses sequential access patterns \citep{patterson2013compute
 
 \section{Summary and Research Gap}
 
+Table~\ref{tab:related_work_strengths} summarises the key strength and principal limitation of each system reviewed above. The pattern that emerges is consistent: systems optimised for online serving treat each model as a fixed endpoint and never reorder tasks across models; systems that support batching either operate on a single model or do not expose their scheduling policy; and prefetching work targets within-model layer streaming rather than cross-model checkpoint overlap at the cluster scheduler level.
+
 \begin{table}[htbp]
 \centering
-\caption{Comparison of scheduling approaches for LLM inference}
+\caption{Strengths and limitations of related systems}
+\label{tab:related_work_strengths}
+\begin{tabular}{p{3.0cm} p{5.0cm} p{5.0cm}}
+\toprule
+\textbf{System} & \textbf{Key Strength} & \textbf{Key Limitation} \\
+\midrule
+Orca \citep{yu2022orca}
+  & Iteration-level scheduling maximises GPU utilisation within a loaded model
+  & Single-model only; no mechanism for multi-model batches \\
+\addlinespace
+vLLM \citep{kwon2023efficient}
+  & PagedAttention and continuous batching eliminate GPU memory waste
+  & Each model switch incurs a full cold-start load; no cross-model task reordering \\
+\addlinespace
+Clipper \citep{crankshaw2017clipper}
+  & Adaptive batching with online latency SLO guarantees
+  & Designed for online serving; no batch makespan objective \\
+\addlinespace
+Clockwork \citep{gujarati2020serving}
+  & Deterministic, profiling-driven latency via strict admission control
+  & Timing model breaks for autoregressive LLMs with variable output lengths \\
+\addlinespace
+AlpaServe \citep{li2023alpaserve}
+  & Statistical multiplexing with model parallelism reduces SLO violations under load
+  & Targets online traffic bursts; does not reorder tasks across models for makespan \\
+\addlinespace
+INFaaS \citep{romero2021infaas}
+  & Automates model variant selection to meet latency and cost SLOs
+  & Treats model switching as a background configuration change, not a scheduling cost \\
+\addlinespace
+ServerlessLLM \citep{fu2024serverlessllm}
+  & Locality-enhanced routing minimises cold starts via local SSD caching
+  & No task reordering by model; the cold-start cost is still paid once per model \\
+\addlinespace
+OpenAI Batch API \citep{openai_batch_api}
+  & Handles up to 50,000 tasks with 50\% cost reduction at cloud scale
+  & Single-model only; closed-source; scheduling policy is not exposed \\
+\addlinespace
+DeepSpeed-Inference \citep{aminabadi2022deepspeed}
+  & Layer-level prefetching overlaps CPU$\to$GPU transfer with computation
+  & Prefetching operates within a single loaded model, not across model switches \\
+\addlinespace
+FlexGen \citep{sheng2023flexgen}
+  & Enables LLM inference on memory-constrained hardware via CPU/disk offloading
+  & Optimises single-model throughput under memory pressure; not multi-model batch scheduling \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:related_work_comparison} maps these systems against the five capabilities required for shared-structure-aware batch scheduling.
+
+\begin{table}[htbp]
+\centering
+\caption{Feature comparison of scheduling approaches for LLM inference}
 \label{tab:related_work_comparison}
 \begin{tabular}{lccccc}
 \toprule
@@ -277,7 +332,7 @@ OpenAI Batch \citep{openai_batch_api} & \checkmark & N/A$^*$ & ? & ? & \texttime
 \end{tabular}
 \end{table}
 
-Existing systems either focus on online serving or provide batch APIs without shared-structure-aware scheduling. This work fills that gap with a cluster-level scheduler that discovers model sharing, applies Johnson's Rule for optimal group ordering, and uses checkpoint prefetching to hide loading latency.
+No existing system combines batch support, model grouping, and cluster-level checkpoint prefetching in an open, composable framework. This work fills that gap with a scheduler that discovers shared model structure, applies Johnson's Rule for optimal group ordering, and uses checkpoint prefetching to overlap loading with execution.
 
 
 
