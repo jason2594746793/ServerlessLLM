@@ -21,14 +21,12 @@
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
 \@writefile{toc}{\contentsline {section}{\numberline {1.1}Motivation}{1}{section.1.1}\protected@file@percent }
-\citation{openai_batch_api}
 \@writefile{lof}{\contentsline {figure}{\numberline {1.1}{\ignorespaces FIFO vs Model-Grouped scheduling for 20 tasks with 2 models. FIFO incurs 10 switches (each $\sim $108s); grouping requires only 1 switch.\relax }}{2}{figure.caption.2}\protected@file@percent }
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
 \newlabel{fig:fifo_vs_grouped}{{1.1}{2}{FIFO vs Model-Grouped scheduling for 20 tasks with 2 models. FIFO incurs 10 switches (each $\sim $108s); grouping requires only 1 switch.\relax }{figure.caption.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {1.2}Problem Definition}{2}{section.1.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {1.3}Research Questions}{3}{section.1.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {1.4}Contributions}{3}{section.1.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {1.5}Scope and Boundaries}{4}{section.1.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.2}Research Questions}{2}{section.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.3}Contributions}{2}{section.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.4}Scope and Boundaries}{3}{section.1.4}\protected@file@percent }
 \citation{vaswani2017attention}
 \citation{brown2020language,touvron2023llama}
 \citation{kwon2023efficient}
@@ -37,14 +35,14 @@
 \citation{zheng2024sglang}
 \citation{cuda_guide2024}
 \citation{fu2024serverlessllm}
-\@writefile{toc}{\contentsline {chapter}{\numberline {2}Background}{5}{chapter.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {2}Background}{4}{chapter.2}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {2.1}Transformer-Based LLM Inference}{5}{section.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2.2}KV Cache and Prefix Caching}{5}{section.2.2}\protected@file@percent }
-\newlabel{sec:bg_kv_cache}{{2.2}{5}{KV Cache and Prefix Caching}{section.2.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {2.3}GPU Memory Hierarchy and Pinned Memory}{5}{section.2.3}\protected@file@percent }
-\newlabel{sec:bg_pinned_memory}{{2.3}{5}{GPU Memory Hierarchy and Pinned Memory}{section.2.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2.1}Transformer-Based LLM Inference}{4}{section.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.2}KV Cache and Prefix Caching}{4}{section.2.2}\protected@file@percent }
+\newlabel{sec:bg_kv_cache}{{2.2}{4}{KV Cache and Prefix Caching}{section.2.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2.3}GPU Memory Hierarchy and Pinned Memory}{4}{section.2.3}\protected@file@percent }
+\newlabel{sec:bg_pinned_memory}{{2.3}{4}{GPU Memory Hierarchy and Pinned Memory}{section.2.3}{}}
 \citation{shahrad2020serverless}
 \citation{fu2024serverlessllm}
 \citation{fu2024serverlessllm}
@@ -52,16 +50,16 @@
 \citation{pinedo2016scheduling}
 \citation{graham1966bounds}
 \citation{pinedo2016scheduling}
-\@writefile{toc}{\contentsline {section}{\numberline {2.4}Serverless Computing and Cold Starts}{6}{section.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2.5}ServerlessLLM Architecture}{6}{section.2.5}\protected@file@percent }
-\newlabel{sec:bg_serverlessllm}{{2.5}{6}{ServerlessLLM Architecture}{section.2.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {2.6}Storage Hierarchy and Network-Attached Model Repositories}{6}{section.2.6}\protected@file@percent }
-\newlabel{sec:bg_storage_hierarchy}{{2.6}{6}{Storage Hierarchy and Network-Attached Model Repositories}{section.2.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2.4}Serverless Computing and Cold Starts}{5}{section.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.5}ServerlessLLM Architecture}{5}{section.2.5}\protected@file@percent }
+\newlabel{sec:bg_serverlessllm}{{2.5}{5}{ServerlessLLM Architecture}{section.2.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2.6}Storage Hierarchy and Network-Attached Model Repositories}{5}{section.2.6}\protected@file@percent }
+\newlabel{sec:bg_storage_hierarchy}{{2.6}{5}{Storage Hierarchy and Network-Attached Model Repositories}{section.2.6}{}}
 \citation{pinedo2016scheduling}
-\@writefile{toc}{\contentsline {section}{\numberline {2.7}Makespan Minimisation}{7}{section.2.7}\protected@file@percent }
-\newlabel{sec:bg_makespan}{{2.7}{7}{Makespan Minimisation}{section.2.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.7.1}Johnson's Rule for Two-Machine Flow-Shops}{7}{subsection.2.7.1}\protected@file@percent }
-\newlabel{sec:bg_johnsons_rule}{{2.7.1}{7}{Johnson's Rule for Two-Machine Flow-Shops}{subsection.2.7.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2.7}Makespan Minimisation}{6}{section.2.7}\protected@file@percent }
+\newlabel{sec:bg_makespan}{{2.7}{6}{Makespan Minimisation}{section.2.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.7.1}Johnson's Rule for Two-Machine Flow-Shops}{6}{subsection.2.7.1}\protected@file@percent }
+\newlabel{sec:bg_johnsons_rule}{{2.7.1}{6}{Johnson's Rule for Two-Machine Flow-Shops}{subsection.2.7.1}{}}
 \citation{hendrycks2020measuring}
 \citation{chen2021evaluating}
 \citation{zheng2023judging}
@@ -79,12 +77,12 @@
 \citation{kubernetes2024}
 \citation{sellis1988multiple}
 \citation{fu2024serverlessllm}
-\@writefile{toc}{\contentsline {chapter}{\numberline {3}Related Work}{8}{chapter.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {3}Related Work}{7}{chapter.3}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {3.1}LLM Batch Workloads}{8}{section.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3.2}ML Serving Systems}{8}{section.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3.3}Data-Locality and Model-Aware Scheduling}{8}{section.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.1}LLM Batch Workloads}{7}{section.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.2}ML Serving Systems}{7}{section.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.3}Data-Locality and Model-Aware Scheduling}{7}{section.3.3}\protected@file@percent }
 \citation{patterson2013computer}
 \citation{aminabadi2022deepspeed}
 \citation{sheng2023flexgen}
@@ -94,34 +92,37 @@
 \citation{li2023alpaserve}
 \citation{fu2024serverlessllm}
 \citation{openai_batch_api}
-\@writefile{toc}{\contentsline {section}{\numberline {3.4}Prefetching and Pipelining}{9}{section.3.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3.5}Summary and Research Gap}{9}{section.3.5}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {3.1}{\ignorespaces Comparison of scheduling approaches for LLM inference\relax }}{9}{table.caption.3}\protected@file@percent }
-\newlabel{tab:related_work_comparison}{{3.1}{9}{Comparison of scheduling approaches for LLM inference\relax }{table.caption.3}{}}
-\@writefile{toc}{\contentsline {chapter}{\numberline {4}Design and Implementation}{10}{chapter.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.4}Prefetching and Pipelining}{8}{section.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.5}Summary and Research Gap}{8}{section.3.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3.1}{\ignorespaces Comparison of scheduling approaches for LLM inference\relax }}{8}{table.caption.3}\protected@file@percent }
+\newlabel{tab:related_work_comparison}{{3.1}{8}{Comparison of scheduling approaches for LLM inference\relax }{table.caption.3}{}}
+\@writefile{toc}{\contentsline {chapter}{\numberline {4}Design and Implementation}{9}{chapter.4}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {4.1}System Architecture Overview}{10}{section.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {4.2}Problem Analysis: Shared Structure in Batches}{10}{section.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.1}Model Sharing Analysis}{10}{subsection.4.2.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces System architecture. The BatchScheduler groups tasks by model, applies Johnson's Rule ordering, and persists job state to a SQLite database. The Router queries the same database for healthy worker endpoints. The StorageManager triggers asynchronous checkpoint prefetching (\texttt  {prefetch\_to\_cpu}) to worker nodes ahead of execution. Workers run vLLM with sllm-store for pinned-memory checkpoint management.\relax }}{11}{figure.caption.4}\protected@file@percent }
-\newlabel{fig:system_arch}{{4.1}{11}{System architecture. The BatchScheduler groups tasks by model, applies Johnson's Rule ordering, and persists job state to a SQLite database. The Router queries the same database for healthy worker endpoints. The StorageManager triggers asynchronous checkpoint prefetching (\texttt {prefetch\_to\_cpu}) to worker nodes ahead of execution. Workers run vLLM with sllm-store for pinned-memory checkpoint management.\relax }{figure.caption.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.2}Prefix Sharing Analysis}{12}{subsection.4.2.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {4.3}Shared-Aware Scheduling Algorithm}{12}{section.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.1}Phase 1: Model Grouping}{12}{subsection.4.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.2}Phase 2: Johnson's Rule Ordering}{12}{subsection.4.3.2}\protected@file@percent }
-\newlabel{sec:johnsons_rule}{{4.3.2}{12}{Phase 2: Johnson's Rule Ordering}{subsection.4.3.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.1}System Architecture Overview}{9}{section.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.2}Problem Definition}{9}{section.4.2}\protected@file@percent }
+\newlabel{sec:problem_definition}{{4.2}{9}{Problem Definition}{section.4.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces System architecture. The BatchScheduler groups tasks by model, applies Johnson's Rule ordering, and persists job state to a SQLite database. The Router queries the same database for healthy worker endpoints. The StorageManager triggers asynchronous checkpoint prefetching (\texttt  {prefetch\_to\_cpu}) to worker nodes ahead of execution. Workers run vLLM with sllm-store for pinned-memory checkpoint management.\relax }}{10}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:system_arch}{{4.1}{10}{System architecture. The BatchScheduler groups tasks by model, applies Johnson's Rule ordering, and persists job state to a SQLite database. The Router queries the same database for healthy worker endpoints. The StorageManager triggers asynchronous checkpoint prefetching (\texttt {prefetch\_to\_cpu}) to worker nodes ahead of execution. Workers run vLLM with sllm-store for pinned-memory checkpoint management.\relax }{figure.caption.4}{}}
+\citation{openai_batch_api}
+\@writefile{toc}{\contentsline {section}{\numberline {4.3}Problem Analysis: Shared Structure in Batches}{12}{section.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.1}Model Sharing Analysis}{12}{subsection.4.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.2}Prefix Sharing Analysis}{12}{subsection.4.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.4}Shared-Aware Scheduling Algorithm}{12}{section.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.1}Phase 1: Model Grouping}{12}{subsection.4.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.2}Phase 2: Johnson's Rule Ordering}{12}{subsection.4.4.2}\protected@file@percent }
+\newlabel{sec:johnsons_rule}{{4.4.2}{12}{Phase 2: Johnson's Rule Ordering}{subsection.4.4.2}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {4.2}{\ignorespaces Mapping from batch scheduling to two-machine flow-shop. Each model group $G_i$ becomes a ``job'' with I/O time $a_i$ (loading weights from SSD to pinned memory, Machine\nobreakspace  {}A) and compute time $b_i$ (GPU inference for all tasks, Machine\nobreakspace  {}B). Checkpoint prefetching enables the I/O of job $i+1$ to overlap with the compute of job $i$. Johnson's Rule finds the permutation $\pi $ that minimises the total makespan by maximising these overlaps.\relax }}{13}{figure.caption.5}\protected@file@percent }
 \newlabel{fig:flowshop_mapping}{{4.2}{13}{Mapping from batch scheduling to two-machine flow-shop. Each model group $G_i$ becomes a ``job'' with I/O time $a_i$ (loading weights from SSD to pinned memory, Machine~A) and compute time $b_i$ (GPU inference for all tasks, Machine~B). Checkpoint prefetching enables the I/O of job $i+1$ to overlap with the compute of job $i$. Johnson's Rule finds the permutation $\pi $ that minimises the total makespan by maximising these overlaps.\relax }{figure.caption.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.3}Phase 3: Worker Allocation}{13}{subsection.4.3.3}\protected@file@percent }
-\newlabel{sec:worker_allocation}{{4.3.3}{13}{Phase 3: Worker Allocation}{subsection.4.3.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.3}Phase 3: Worker Allocation}{13}{subsection.4.4.3}\protected@file@percent }
+\newlabel{sec:worker_allocation}{{4.4.3}{13}{Phase 3: Worker Allocation}{subsection.4.4.3}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {4.3}{\ignorespaces End-to-end scheduling example for a 1006-task batch with 4 models on 6 GPUs. \textbf  {Phase\nobreakspace  {}1} groups tasks by model. \textbf  {Phase\nobreakspace  {}2} applies Johnson's Rule: compute-heavy groups ($a_i \leq b_i$) are scheduled first to maximise prefetch overlap. \textbf  {Phase\nobreakspace  {}3} allocates groups to GPUs: Model\nobreakspace  {}D (70B, TP=2) occupies a dedicated 2-GPU tensor parallelism lane; Models\nobreakspace  {}A (500 tasks) and\nobreakspace  {}C (300 tasks) are each split across 2 single-GPU replicas by LPT rebalancing (the lane imbalance exceeds the full model-switch cost: NVMe read $+$ PCIe DMA $+$ vLLM init $\approx $38\,s); Model\nobreakspace  {}B's smaller task count does not meet this threshold and remains on a single GPU. Per-GPU Johnson's Rule ordering is applied within each lane. Dashed arrows (pf) indicate checkpoint prefetch triggers.\relax }}{14}{figure.caption.6}\protected@file@percent }
 \newlabel{fig:scheduling_flow}{{4.3}{14}{End-to-end scheduling example for a 1006-task batch with 4 models on 6 GPUs. \textbf {Phase~1} groups tasks by model. \textbf {Phase~2} applies Johnson's Rule: compute-heavy groups ($a_i \leq b_i$) are scheduled first to maximise prefetch overlap. \textbf {Phase~3} allocates groups to GPUs: Model~D (70B, TP=2) occupies a dedicated 2-GPU tensor parallelism lane; Models~A (500 tasks) and~C (300 tasks) are each split across 2 single-GPU replicas by LPT rebalancing (the lane imbalance exceeds the full model-switch cost: NVMe read $+$ PCIe DMA $+$ vLLM init $\approx $38\,s); Model~B's smaller task count does not meet this threshold and remains on a single GPU. Per-GPU Johnson's Rule ordering is applied within each lane. Dashed arrows (pf) indicate checkpoint prefetch triggers.\relax }{figure.caption.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.4}Baseline Strategies}{15}{subsection.4.3.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {4.4}Checkpoint Prefetching Mechanism}{15}{section.4.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.1}Prefetching Pipeline}{15}{subsection.4.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.2}Design Analysis: Prefetching Across Storage Tiers}{15}{subsection.4.4.2}\protected@file@percent }
-\newlabel{sec:prefetch_storage_tiers}{{4.4.2}{15}{Design Analysis: Prefetching Across Storage Tiers}{subsection.4.4.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.4}Baseline Strategies}{15}{subsection.4.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.5}Checkpoint Prefetching Mechanism}{15}{section.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.1}Prefetching Pipeline}{15}{subsection.4.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.2}Design Analysis: Prefetching Across Storage Tiers}{15}{subsection.4.5.2}\protected@file@percent }
+\newlabel{sec:prefetch_storage_tiers}{{4.5.2}{15}{Design Analysis: Prefetching Across Storage Tiers}{subsection.4.5.2}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {4.1}{\ignorespaces Storage tier characteristics and scheduling implications. Load times are calculated as $\text  {checkpoint\_size} / \text  {bandwidth}$. The NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates.\relax }}{15}{table.caption.7}\protected@file@percent }
 \newlabel{tab:storage_bandwidth}{{4.1}{15}{Storage tier characteristics and scheduling implications. Load times are calculated as $\text {checkpoint\_size} / \text {bandwidth}$. The NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates.\relax }{table.caption.7}{}}
 \@writefile{toc}{\contentsline {chapter}{\numberline {5}Evaluation}{17}{chapter.5}\protected@file@percent }

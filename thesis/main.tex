@@ -148,54 +148,6 @@ The three components compose into a complete pipeline: grouping reduces switches
 \label{fig:fifo_vs_grouped}
 \end{figure}
 
-\section{Problem Definition}
-
-A batch is submitted as a JSONL file where each line specifies one task: the target model, the prompt, and generation parameters. The example below shows a small multi-model batch typical of model benchmarking.
-
-\begin{lstlisting}[language={},basicstyle=\ttfamily\small,frame=single,numbers=none]
-{"custom_id":"t1","method":"POST","url":"/v1/chat/completions",
- "body":{"model":"Qwen/Qwen3-0.6B",
-         "messages":[{"role":"user","content":"Summarise the paper."}],
-         "max_tokens":256}}
-{"custom_id":"t2","method":"POST","url":"/v1/chat/completions",
- "body":{"model":"Qwen/Qwen3-8B",
-         "messages":[{"role":"user","content":"Summarise the paper."}],
-         "max_tokens":256}}
-{"custom_id":"t3","method":"POST","url":"/v1/chat/completions",
- "body":{"model":"Qwen/Qwen3-0.6B",
-         "messages":[{"role":"user","content":"Translate to French."}],
-         "max_tokens":128}}
-\end{lstlisting}
-
-Tasks \texttt{t1} and \texttt{t3} share the same model and can execute consecutively without reloading; \texttt{t2} requires a model switch. The API follows the OpenAI Batch API specification \citep{openai_batch_api}: clients submit a file via \texttt{POST /v1/files}, create a batch via \texttt{POST /v1/batches}, and poll via \texttt{GET /v1/batches/\{id\}}. Results are written to an output JSONL file keyed by \texttt{custom\_id}.
-
-\textbf{Input:}
-\begin{itemize}
-\item A batch of $n$ tasks $B = \{t_1, t_2, \ldots, t_n\}$
-\item Each task $t_i = (m_i, p_i, \theta_i)$ where $m_i$ is the model, $p_i$ is the prompt, and $\theta_i$ are generation parameters
-\item A cluster of $k$ GPU workers $W = \{w_1, w_2, \ldots, w_k\}$
-\item Each worker can load at most one model at a time, with loading latency $L_{load}(m)$
-\item Task inference latency is $L_{infer}(t_i)$
-\end{itemize}
-
-\textbf{Sharing Relationships:}
-\begin{itemize}
-\item \textbf{Model Sharing}: If $m_i = m_j$, tasks $t_i$ and $t_j$ can share loaded model weights, avoiding redundant loading. This is the primary sharing relationship exploited in this work.
-\item \textbf{Prefix Sharing}: If $\text{prefix}(p_i) = \text{prefix}(p_j)$, tasks can benefit from inference engine cache reuse. This is a secondary sharing relationship identified but not exploited in this work (see Chapter~\ref{ch:future}).
-\end{itemize}
-
-\textbf{Optimisation Objective:}
-$$\text{Minimise } C_{max} = \max_{i \in \{1,...,n\}} \text{completion\_time}(t_i)$$
-
-That is, minimise the makespan: the time at which the last task completes.
-
-\textbf{Constraints:}
-\begin{itemize}
-\item Each worker loads at most one model at a time (single-model constraint)
-\item Model switching incurs $L_{load}$ overhead (cold start penalty)
-\item Worker count $k$ can be adjusted via auto-scaling
-\end{itemize}
-
 \section{Research Questions}
 
 Three research questions are addressed:
@@ -438,6 +390,55 @@ Figure~\ref{fig:system_arch} illustrates the system architecture.
 \caption{System architecture. The BatchScheduler groups tasks by model, applies Johnson's Rule ordering, and persists job state to a SQLite database. The Router queries the same database for healthy worker endpoints. The StorageManager triggers asynchronous checkpoint prefetching (\texttt{prefetch\_to\_cpu}) to worker nodes ahead of execution. Workers run vLLM with sllm-store for pinned-memory checkpoint management.}
 \label{fig:system_arch}
 \end{figure}
+
+\section{Problem Definition}
+\label{sec:problem_definition}
+
+A batch is submitted as a JSONL file where each line specifies one task: the target model, the prompt, and generation parameters. The example below shows a small multi-model batch typical of model benchmarking.
+
+\begin{lstlisting}[language={},basicstyle=\ttfamily\small,frame=single,numbers=none]
+{"custom_id":"t1","method":"POST","url":"/v1/chat/completions",
+ "body":{"model":"Qwen/Qwen3-0.6B",
+         "messages":[{"role":"user","content":"Summarise the paper."}],
+         "max_tokens":256}}
+{"custom_id":"t2","method":"POST","url":"/v1/chat/completions",
+ "body":{"model":"Qwen/Qwen3-8B",
+         "messages":[{"role":"user","content":"Summarise the paper."}],
+         "max_tokens":256}}
+{"custom_id":"t3","method":"POST","url":"/v1/chat/completions",
+ "body":{"model":"Qwen/Qwen3-0.6B",
+         "messages":[{"role":"user","content":"Translate to French."}],
+         "max_tokens":128}}
+\end{lstlisting}
+
+Tasks \texttt{t1} and \texttt{t3} share the same model and can execute consecutively without reloading; \texttt{t2} requires a model switch. The API follows the OpenAI Batch API specification \citep{openai_batch_api}: clients submit a file via \texttt{POST /v1/files}, create a batch via \texttt{POST /v1/batches}, and poll via \texttt{GET /v1/batches/\{id\}}. Results are written to an output JSONL file keyed by \texttt{custom\_id}.
+
+\textbf{Input:}
+\begin{itemize}
+\item A batch of $n$ tasks $B = \{t_1, t_2, \ldots, t_n\}$
+\item Each task $t_i = (m_i, p_i, \theta_i)$ where $m_i$ is the model, $p_i$ is the prompt, and $\theta_i$ are generation parameters
+\item A cluster of $k$ GPU workers $W = \{w_1, w_2, \ldots, w_k\}$
+\item Each worker can load at most one model at a time, with loading latency $L_{load}(m)$
+\item Task inference latency is $L_{infer}(t_i)$
+\end{itemize}
+
+\textbf{Sharing Relationships:}
+\begin{itemize}
+\item \textbf{Model Sharing}: If $m_i = m_j$, tasks $t_i$ and $t_j$ can share loaded model weights, avoiding redundant loading. This is the primary sharing relationship exploited in this work.
+\item \textbf{Prefix Sharing}: If $\text{prefix}(p_i) = \text{prefix}(p_j)$, tasks can benefit from inference engine cache reuse. This is a secondary sharing relationship identified but not exploited in this work (see Chapter~\ref{ch:future}).
+\end{itemize}
+
+\textbf{Optimisation Objective:}
+$$\text{Minimise } C_{max} = \max_{i \in \{1,...,n\}} \text{completion\_time}(t_i)$$
+
+That is, minimise the makespan: the time at which the last task completes.
+
+\textbf{Constraints:}
+\begin{itemize}
+\item Each worker loads at most one model at a time (single-model constraint)
+\item Model switching incurs $L_{load}$ overhead (cold start penalty)
+\item Worker count $k$ can be adjusted via auto-scaling
+\end{itemize}
 
 \section{Problem Analysis: Shared Structure in Batches}
 

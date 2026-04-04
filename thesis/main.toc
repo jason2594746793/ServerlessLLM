@@ -1,37 +1,37 @@
 \contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.1}%
 \contentsline {section}{\numberline {1.1}Motivation}{1}{section.1.1}%
-\contentsline {section}{\numberline {1.2}Problem Definition}{2}{section.1.2}%
-\contentsline {section}{\numberline {1.3}Research Questions}{3}{section.1.3}%
-\contentsline {section}{\numberline {1.4}Contributions}{3}{section.1.4}%
-\contentsline {section}{\numberline {1.5}Scope and Boundaries}{4}{section.1.5}%
-\contentsline {chapter}{\numberline {2}Background}{5}{chapter.2}%
-\contentsline {section}{\numberline {2.1}Transformer-Based LLM Inference}{5}{section.2.1}%
-\contentsline {section}{\numberline {2.2}KV Cache and Prefix Caching}{5}{section.2.2}%
-\contentsline {section}{\numberline {2.3}GPU Memory Hierarchy and Pinned Memory}{5}{section.2.3}%
-\contentsline {section}{\numberline {2.4}Serverless Computing and Cold Starts}{6}{section.2.4}%
-\contentsline {section}{\numberline {2.5}ServerlessLLM Architecture}{6}{section.2.5}%
-\contentsline {section}{\numberline {2.6}Storage Hierarchy and Network-Attached Model Repositories}{6}{section.2.6}%
-\contentsline {section}{\numberline {2.7}Makespan Minimisation}{7}{section.2.7}%
-\contentsline {subsection}{\numberline {2.7.1}Johnson's Rule for Two-Machine Flow-Shops}{7}{subsection.2.7.1}%
-\contentsline {chapter}{\numberline {3}Related Work}{8}{chapter.3}%
-\contentsline {section}{\numberline {3.1}LLM Batch Workloads}{8}{section.3.1}%
-\contentsline {section}{\numberline {3.2}ML Serving Systems}{8}{section.3.2}%
-\contentsline {section}{\numberline {3.3}Data-Locality and Model-Aware Scheduling}{8}{section.3.3}%
-\contentsline {section}{\numberline {3.4}Prefetching and Pipelining}{9}{section.3.4}%
-\contentsline {section}{\numberline {3.5}Summary and Research Gap}{9}{section.3.5}%
-\contentsline {chapter}{\numberline {4}Design and Implementation}{10}{chapter.4}%
-\contentsline {section}{\numberline {4.1}System Architecture Overview}{10}{section.4.1}%
-\contentsline {section}{\numberline {4.2}Problem Analysis: Shared Structure in Batches}{10}{section.4.2}%
-\contentsline {subsection}{\numberline {4.2.1}Model Sharing Analysis}{10}{subsection.4.2.1}%
-\contentsline {subsection}{\numberline {4.2.2}Prefix Sharing Analysis}{12}{subsection.4.2.2}%
-\contentsline {section}{\numberline {4.3}Shared-Aware Scheduling Algorithm}{12}{section.4.3}%
-\contentsline {subsection}{\numberline {4.3.1}Phase 1: Model Grouping}{12}{subsection.4.3.1}%
-\contentsline {subsection}{\numberline {4.3.2}Phase 2: Johnson's Rule Ordering}{12}{subsection.4.3.2}%
-\contentsline {subsection}{\numberline {4.3.3}Phase 3: Worker Allocation}{13}{subsection.4.3.3}%
-\contentsline {subsection}{\numberline {4.3.4}Baseline Strategies}{15}{subsection.4.3.4}%
-\contentsline {section}{\numberline {4.4}Checkpoint Prefetching Mechanism}{15}{section.4.4}%
-\contentsline {subsection}{\numberline {4.4.1}Prefetching Pipeline}{15}{subsection.4.4.1}%
-\contentsline {subsection}{\numberline {4.4.2}Design Analysis: Prefetching Across Storage Tiers}{15}{subsection.4.4.2}%
+\contentsline {section}{\numberline {1.2}Research Questions}{2}{section.1.2}%
+\contentsline {section}{\numberline {1.3}Contributions}{2}{section.1.3}%
+\contentsline {section}{\numberline {1.4}Scope and Boundaries}{3}{section.1.4}%
+\contentsline {chapter}{\numberline {2}Background}{4}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Transformer-Based LLM Inference}{4}{section.2.1}%
+\contentsline {section}{\numberline {2.2}KV Cache and Prefix Caching}{4}{section.2.2}%
+\contentsline {section}{\numberline {2.3}GPU Memory Hierarchy and Pinned Memory}{4}{section.2.3}%
+\contentsline {section}{\numberline {2.4}Serverless Computing and Cold Starts}{5}{section.2.4}%
+\contentsline {section}{\numberline {2.5}ServerlessLLM Architecture}{5}{section.2.5}%
+\contentsline {section}{\numberline {2.6}Storage Hierarchy and Network-Attached Model Repositories}{5}{section.2.6}%
+\contentsline {section}{\numberline {2.7}Makespan Minimisation}{6}{section.2.7}%
+\contentsline {subsection}{\numberline {2.7.1}Johnson's Rule for Two-Machine Flow-Shops}{6}{subsection.2.7.1}%
+\contentsline {chapter}{\numberline {3}Related Work}{7}{chapter.3}%
+\contentsline {section}{\numberline {3.1}LLM Batch Workloads}{7}{section.3.1}%
+\contentsline {section}{\numberline {3.2}ML Serving Systems}{7}{section.3.2}%
+\contentsline {section}{\numberline {3.3}Data-Locality and Model-Aware Scheduling}{7}{section.3.3}%
+\contentsline {section}{\numberline {3.4}Prefetching and Pipelining}{8}{section.3.4}%
+\contentsline {section}{\numberline {3.5}Summary and Research Gap}{8}{section.3.5}%
+\contentsline {chapter}{\numberline {4}Design and Implementation}{9}{chapter.4}%
+\contentsline {section}{\numberline {4.1}System Architecture Overview}{9}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Problem Definition}{9}{section.4.2}%
+\contentsline {section}{\numberline {4.3}Problem Analysis: Shared Structure in Batches}{12}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Model Sharing Analysis}{12}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Prefix Sharing Analysis}{12}{subsection.4.3.2}%
+\contentsline {section}{\numberline {4.4}Shared-Aware Scheduling Algorithm}{12}{section.4.4}%
+\contentsline {subsection}{\numberline {4.4.1}Phase 1: Model Grouping}{12}{subsection.4.4.1}%
+\contentsline {subsection}{\numberline {4.4.2}Phase 2: Johnson's Rule Ordering}{12}{subsection.4.4.2}%
+\contentsline {subsection}{\numberline {4.4.3}Phase 3: Worker Allocation}{13}{subsection.4.4.3}%
+\contentsline {subsection}{\numberline {4.4.4}Baseline Strategies}{15}{subsection.4.4.4}%
+\contentsline {section}{\numberline {4.5}Checkpoint Prefetching Mechanism}{15}{section.4.5}%
+\contentsline {subsection}{\numberline {4.5.1}Prefetching Pipeline}{15}{subsection.4.5.1}%
+\contentsline {subsection}{\numberline {4.5.2}Design Analysis: Prefetching Across Storage Tiers}{15}{subsection.4.5.2}%
 \contentsline {chapter}{\numberline {5}Evaluation}{17}{chapter.5}%
 \contentsline {paragraph}{\numberline {5.0.0.0.1}Hypotheses.}{17}{paragraph.5.0.0.0.1}%
 \contentsline {section}{\numberline {5.1}Experimental Setup}{17}{section.5.1}%
