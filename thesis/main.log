@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  4 APR 2026 00:14
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  4 APR 2026 01:47
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1291,7 +1291,7 @@ Chapter 6.
 ] [30] [31]
 Chapter 7.
 
-Overfull \hbox (16.35442pt too wide) in paragraph at lines 1159--1160
+Overfull \hbox (16.35442pt too wide) in paragraph at lines 1161--1162
 \OT1/ptm/m/n/12 (-20) JSONL out-put to ob-ject stor-age, deadline-aware au-tosc
 al-ing ($[] \OT1/ptmcm/m/n/12 = \OMS/pzccm/m/n/12 d\OML/ptmcm/m/it/12 n \OMS/pz
 ccm/m/n/12 ^^A \OML/ptmcm/m/it/12 L[]=T[]\OMS/pzccm/m/n/12 e$\OT1/ptm/m/n/12 (-
@@ -1313,7 +1313,7 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 Here is how much of TeX's memory you used:
  39425 strings out of 478287
  875647 string characters out of 5849289
- 1365410 words of memory out of 5000000
+ 1365411 words of memory out of 5000000
  56181 multiletter control sequences out of 15000+600000
  579044 words of font info for 519 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
@@ -1332,10 +1332,10 @@ t/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type
 l/usyr.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive
 /texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (45 pages, 428765 bytes).
+Output written on main.pdf (45 pages, 429642 bytes).
 PDF statistics:
- 1225 PDF objects out of 1440 (max. 8388607)
- 865 compressed objects within 9 object streams
+ 1226 PDF objects out of 1440 (max. 8388607)
+ 866 compressed objects within 9 object streams
  211 named destinations out of 1000 (max. 500000)
  147034 words of extra memory for PDF output out of 154059 (max. 10000000)
 
