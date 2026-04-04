@@ -187,7 +187,7 @@ This work focuses strictly on cluster-level scheduling. The inference engine is 
 % CHAPTER 2: BACKGROUND
 % ============================================================================
 
-\chapter{Background}
+\chapter{Background and Related Work}
 
 
 \section{Transformer-Based LLM Inference}
@@ -232,14 +232,8 @@ Makespan minimisation assigns $n$ jobs to $m$ machines to minimise $C_{\max}$ \c
 
 Johnson's Rule \citep{pinedo2016scheduling} solves the two-machine flow-shop optimally: given $n$ jobs processed first on Machine~A then Machine~B, find the permutation minimising makespan. Partition jobs into $S_1 = \{j : a_j \leq b_j\}$ (compute-heavy, sorted by $a_j$ ascending) and $S_2 = \{j : a_j > b_j\}$ (I/O-heavy, sorted by $b_j$ descending); the optimal sequence is $S_1$ followed by $S_2$. Compute-heavy jobs execute first because their prolonged Machine~B execution conceals the loading of the next job on Machine~A; I/O-heavy jobs are placed last since fewer subsequent jobs remain to stall while their loading completes.
 
-Machine~A is the I/O stage (loading weights from SSD to CPU pinned memory), Machine~B is the compute stage (GPU inference for all tasks in a group), and each job is a model group. This mapping is formalised in Chapter~4.
+Machine~A is the I/O stage (loading weights from SSD to CPU pinned memory), Machine~B is the compute stage (GPU inference for all tasks in a group), and each job is a model group. This mapping is formalised in Chapter~3.
 
-
-% ============================================================================
-% CHAPTER 2B: RELATED WORK
-% ============================================================================
-
-\chapter{Related Work}
 
 
 \section{LLM Batch Workloads}
@@ -1089,7 +1083,7 @@ The three optimisations compose multiplicatively: model grouping provides first-
 
 \paragraph{RQ1: How to Discover and Exploit Shared Structure?}
 
-Model grouping exploits the model-sharing structure formalised in Chapter~4 (Section~\ref{sec:problem_definition}), reducing switches from $O(n)$ to $O(k)$ for a 99\% makespan reduction (Experiment~1). The advantage grows with batch size as larger batches amortise the two fixed model-loading transitions over more tasks (Experiment~3).
+Model grouping exploits the model-sharing structure formalised in Chapter~3 (Section~\ref{sec:problem_definition}), reducing switches from $O(n)$ to $O(k)$ for a 99\% makespan reduction (Experiment~1). The advantage grows with batch size as larger batches amortise the two fixed model-loading transitions over more tasks (Experiment~3).
 
 \paragraph{RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}
 
