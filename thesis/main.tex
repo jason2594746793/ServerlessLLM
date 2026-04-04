@@ -192,7 +192,7 @@ This work focuses strictly on cluster-level scheduling. The inference engine is 
 
 \section{Transformer-Based LLM Inference}
 
-LLMs are built on the transformer architecture \citep{vaswani2017attention}, generating tokens autoregressively via a compute-bound prefill phase ($O(L^2)$ attention) followed by a memory-bandwidth-bound decode phase (one token per step). Modern LLMs range from 0.5B to 405B parameters \citep{brown2020language, touvron2023llama}; an 8B model requires $\sim$15\,GB in FP16 and a 70B model $\sim$140\,GB. Loading weights from storage takes 80--120 seconds for an 8B model from SSD.
+LLMs are built on the transformer architecture \citep{vaswani2017attention}, generating tokens autoregressively via a compute-bound prefill phase ($O(L^2)$ attention) followed by a memory-bandwidth-bound decode phase (one token per step). Modern LLMs range from 0.5B to 405B parameters \citep{brown2020language, touvron2023llama}; an 8B model requires $\sim$15\,GB in FP16 and a 70B model $\sim$140\,GB.
 
 vLLM \citep{kwon2023efficient} introduced continuous batching (iteration-level scheduling), inserting new requests at every decode step to maintain near-full GPU utilisation within a single loaded model. It does not address switching between models. Tensor parallelism \citep{shoeybi2019megatron} shards weight matrices across multiple GPUs for models exceeding a single GPU's VRAM; this work assumes each model fits within one GPU, and tensor parallelism can be combined with the proposed scheduler when needed.
 
@@ -442,13 +442,7 @@ That is, minimise the makespan: the time at which the last task completes.
 
 \section{Problem Analysis: Shared Structure in Batches}
 
-\subsection{Model Sharing Analysis}
-
-Batch workloads exhibit substantial model sharing: in benchmarking, multiple tasks use the same model with different prompts; in dataset processing, all tasks share one model. With arbitrary ordering across $k$ distinct models, the system incurs $O(n)$ switches in the worst case, each requiring eviction and reload (80--120 seconds for an 8B model). Grouping reduces switches to $O(k)$; for 20 interleaved tasks across two models, this eliminates $9 \times 108 = 972$ seconds of overhead. Since $L_{load}$ is 100--200$\times$ larger than $L_{infer}$, minimising switches has first-order impact on makespan.
-
-\subsection{Prefix Sharing Analysis}
-
-Batch tasks often share prompt prefixes (RAG contexts, few-shot examples, system prompts). Prefix caching reduces prefill time from $\sim$2\,s to $\sim$0.05\,s, but model switching costs 80--120\,s, making model grouping the first-order optimisation. Prefix-aware ordering within groups is left as future work (Chapter~\ref{ch:future}).
+The formal problem definition above establishes two sharing relationships. Model sharing has first-order impact: since $L_{load}$ is 100--200$\times$ larger than $L_{infer}$ (Section~\ref{sec:bg_serverlessllm}), eliminating switches from $O(n)$ to $O(k)$ dominates all other optimisations. Prefix sharing is a second-order effect: prefix caching reduces prefill time from $\sim$2\,s to $\sim$0.05\,s per task, which is negligible compared to the 80--120\,s model-switch cost; prefix-aware ordering within groups is therefore deferred to future work (Chapter~\ref{ch:future}).
 
 \section{Shared-Aware Scheduling Algorithm}
 
@@ -1095,7 +1089,7 @@ The three optimisations compose multiplicatively: model grouping provides first-
 
 \paragraph{RQ1: How to Discover and Exploit Shared Structure?}
 
-Model grouping discovers and exploits shared model weights, reducing switches from $O(n)$ to $O(k)$ for a 99\% makespan reduction (Experiment~1). Advantages grow with batch size as larger batches amortise fixed loading costs over more tasks (Experiment~3).
+Model grouping exploits the model-sharing structure formalised in Chapter~4 (Section~\ref{sec:problem_definition}), reducing switches from $O(n)$ to $O(k)$ for a 99\% makespan reduction (Experiment~1). The advantage grows with batch size as larger batches amortise the two fixed model-loading transitions over more tasks (Experiment~3).
 
 \paragraph{RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}
 
