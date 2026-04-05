@@ -150,25 +150,17 @@ Together, these three components form a complete pipeline: grouping reduces swit
 
 \section{Research Questions}
 
-Three research questions are addressed:
+Three research questions are addressed.
 
-\begin{itemize}
-  \item[\textbf{RQ1}] How can shared structure (shared model weights) in a batch be discovered and exploited to reduce makespan, and how does model grouping compare to naive FIFO scheduling?
-  \item[\textbf{RQ2}] Can the batch scheduling problem be modelled as a two-machine flow-shop of I/O and compute stages, and does Johnson's Rule provide an effective group ordering to maximise I/O-computation overlap via checkpoint prefetching?
-  \item[\textbf{RQ3}] How do FIFO, model grouping, and shared-aware scheduling compare across varying batch sizes, model sizes, and storage tiers (local SSD, RAID, network storage)?
-\end{itemize}
+\textbf{RQ1:} How can shared structure (shared model weights) in a batch be discovered and exploited to reduce makespan, and how does model grouping compare to naive FIFO scheduling?
+
+\textbf{RQ2:} Can the batch scheduling problem be modelled as a two-machine flow-shop of I/O and compute stages, and does Johnson's Rule provide an effective group ordering to maximise I/O-computation overlap via checkpoint prefetching?
+
+\textbf{RQ3:} How do FIFO, model grouping, and shared-aware scheduling compare across varying batch sizes, model sizes, and storage tiers (local SSD, RAID, network storage)?
 
 \section{Contributions}
 
-Five contributions are made:
-
-\begin{itemize}
-  \item \textbf{Two-machine flow-shop formulation.} The batch scheduling problem is formalised as a two-machine flow-shop, mapping model loading to Machine~A (I/O) and GPU inference to Machine~B (compute). This mapping is the theoretical basis that justifies applying Johnson's Rule for provably optimal group ordering.
-  \item \textbf{Shared-aware scheduling algorithm.} A cluster-level scheduler that groups tasks by model, reducing switches from $O(n)$ to $O(k)$, then applies the flow-shop formulation above to determine the optimal group execution order and trigger prefetching.
-  \item \textbf{Checkpoint prefetching mechanism.} An implementation that uses the ServerlessLLM pinned memory pool to load the next model's checkpoint from SSD into CPU memory during the current group's GPU execution, hiding the I/O stage of each model transition.
-  \item \textbf{Storage tier characterisation.} An analysis and end-to-end evaluation of prefetching effectiveness across four storage tiers (NVMe, RAID-0, 10\,GbE NFS, 100\,GbE NFS), quantifying how storage bandwidth affects the overlap window and residual transition cost.
-  \item \textbf{OpenAI-compatible batch API.} An extension of the ServerlessLLM API to accept multi-model batch submissions in OpenAI Batch API format, enabling drop-in migration from cloud batch services without client-side changes.
-\end{itemize}
+Five contributions are made. The \textbf{two-machine flow-shop formulation} maps model loading (I/O) and GPU inference (compute) to Machine~A and Machine~B respectively, providing the theoretical justification for applying Johnson's Rule. The \textbf{shared-aware scheduling algorithm} groups tasks by model, reducing switches from $O(n)$ to $O(k)$, then applies the flow-shop formulation to determine the optimal group execution order and trigger prefetching. The \textbf{checkpoint prefetching mechanism} uses the ServerlessLLM pinned memory pool to load the next model's checkpoint from SSD into CPU memory during the current group's execution, hiding the I/O cost of each transition. The \textbf{storage tier characterisation} evaluates prefetching effectiveness across NVMe, RAID-0, 10\,GbE NFS, and 100\,GbE NFS, quantifying how storage bandwidth affects the overlap window and residual transition cost. Finally, an \textbf{OpenAI-compatible batch API} extends the ServerlessLLM API to accept multi-model batch submissions in OpenAI Batch API format, enabling drop-in migration from cloud batch services.
 
 The project contributed approximately 2,700 lines of new core framework Python code to the existing ServerlessLLM framework, with additional benchmark scripts and unit tests on top of that.
 
@@ -215,14 +207,7 @@ Serverless functions suffer from cold starts: the latency of initialising a new 
 \section{ServerlessLLM Architecture}
 \label{sec:bg_serverlessllm}
 
-ServerlessLLM \citep{fu2024serverlessllm} is an open-source serverless LLM inference framework designed for low-latency model loading. Its architecture consists of four components:
-
-\begin{itemize}
-  \item \textbf{Head Node:} Receives inference requests via an API gateway, maintains deployment state in a SQLite database, and dispatches tasks to workers via a Router.
-  \item \textbf{Workers (Pylets):} GPU nodes managed by the Pylet process manager. Each worker runs vLLM \citep{kwon2023efficient} instances for inference; Pylet handles instance lifecycle (start, stop, health checks) and reports resource availability.
-  \item \textbf{sllm-store:} A C++ storage daemon running on each worker that manages a pinned memory pool and provides gRPC endpoints for model loading \citep{grpc2024}. Key operations include \texttt{LoadModelAsync} (load weights into pinned CPU memory) and \texttt{RegisterModel} (register a model path). sllm-store uses multi-threaded I/O to saturate SSD bandwidth during loading.
-  \item \textbf{AutoScaler:} Monitors deployment state and adjusts the number of vLLM instances based on demand. The default policy is reactive: scale up when queue depth exceeds a threshold, scale down after an idle timeout.
-\end{itemize}
+ServerlessLLM \citep{fu2024serverlessllm} is an open-source serverless LLM inference framework designed for low-latency model loading. The \textbf{Head Node} receives inference requests via an API gateway, maintains deployment state in a SQLite database, and dispatches tasks to workers via a Router. \textbf{Workers} (Pylets) are GPU nodes managed by the Pylet process manager; each runs one or more vLLM \citep{kwon2023efficient} instances for inference, with Pylet handling instance lifecycle and reporting resource availability. On each worker, \textbf{sllm-store} is a C++ storage daemon that manages a pinned memory pool and provides gRPC endpoints for model loading \citep{grpc2024}, using multi-threaded I/O to saturate SSD bandwidth; its \texttt{LoadModelAsync} operation loads weights into pinned CPU memory for subsequent DMA transfer. The \textbf{AutoScaler} monitors deployment state and adjusts vLLM instance counts reactively, scaling up when queue depth exceeds a threshold and scaling down after an idle timeout.
 
 The existing scheduler is designed for online serving, assigning incoming requests to available workers via round-robin. For batch workloads this has two limitations: (1)~tasks are assigned independently without considering shared models, causing excessive model switching; and (2)~scaling is reactive rather than proactive, causing unnecessary cold starts at the beginning of a batch.
 
@@ -356,7 +341,7 @@ The shared-aware scheduling system consists of four components. A shared-structu
 
 \section{System Architecture Overview}
 
-The system extends the ServerlessLLM head node with three new components: the BatchScheduler (model grouping and Johnson's Rule ordering), the StorageManager (checkpoint prefetching into the pinned memory pool), and a batch-aware AutoScaler integration, all operating at cluster scheduler level without inference engine modifications. A SQLite database (\texttt{state.db}) stores batch jobs, task status, and deployment configuration; the Router reads healthy worker endpoints from it. Data flow: (1)~the user submits a batch via the API Gateway; (2)~the BatchScheduler groups tasks, applies Johnson's Rule, persists job state, and feeds ordered tasks to the Router; (3)~the Router dispatches tasks to vLLM workers; (4)~the StorageManager prefetches the next model's weights while the current group executes; (5)~the AutoScaler adjusts instance count.
+The system extends the ServerlessLLM head node with three new components: the BatchScheduler (model grouping and Johnson's Rule ordering), the StorageManager (checkpoint prefetching into the pinned memory pool), and a batch-aware AutoScaler integration, all operating at cluster scheduler level without inference engine modifications. A SQLite database (\texttt{state.db}) stores batch jobs, task status, and deployment configuration; the Router reads healthy worker endpoints from it. The user submits a batch via the API Gateway; the BatchScheduler groups tasks, applies Johnson's Rule, persists job state, and feeds ordered tasks to the Router, which dispatches them to vLLM workers. Concurrently, the StorageManager prefetches the next model's weights while the current group executes, and the AutoScaler adjusts instance count as needed.
 
 Figure~\ref{fig:system_arch} illustrates the system architecture.
 
@@ -672,14 +657,15 @@ The shared-aware scheduling algorithm operates at the cluster scheduler level, a
 
 \chapter{Evaluation}
 
-Four falsifiable hypotheses are stated and tested through five experiments:
+Four falsifiable hypotheses are tested across five experiments.
 
-\begin{itemize}
-  \item[\textbf{H1}] \textbf{Model grouping dominates:} model-grouped scheduling reduces makespan by at least 80\% over FIFO, because it eliminates redundant model switches from $O(n)$ to $O(k)$.
-  \item[\textbf{H2}] \textbf{Prefetching hides I/O:} checkpoint prefetching reduces the visible model-loading penalty by approximately 50\%, because I/O and compute proceed in parallel rather than sequentially.
-  \item[\textbf{H3}] \textbf{Johnson's Rule beats naive ordering:} Johnson's Rule outperforms naive group orderings (alphabetical, size-descending) by at least 5\% on mixed-model batches, because it maximises prefetch overlap by placing compute-heavy groups first.
-  \item[\textbf{H4}] \textbf{Gains are robust across scale:} the makespan improvements from shared-aware scheduling persist as batch size grows from 99 to 501 tasks, confirming that scheduling overhead does not eliminate the benefit.
-\end{itemize}
+\textbf{H1} (\textit{Model grouping dominates}): model-grouped scheduling reduces makespan by at least 80\% over FIFO by eliminating redundant model switches from $O(n)$ to $O(k)$.
+
+\textbf{H2} (\textit{Prefetching hides I/O}): checkpoint prefetching reduces the visible model-loading penalty by approximately 50\%, because I/O and compute proceed in parallel rather than sequentially.
+
+\textbf{H3} (\textit{Johnson's Rule beats naive ordering}): Johnson's Rule outperforms alphabetical and size-descending orderings by at least 5\% on mixed-model batches by placing compute-heavy groups first to maximise prefetch overlap.
+
+\textbf{H4} (\textit{Gains are robust across scale}): makespan improvements persist as batch size grows from 99 to 501 tasks, confirming that scheduling overhead does not eliminate the benefit.
 
 
 \section{Experimental Setup}
@@ -908,7 +894,7 @@ Ordering & Makespan (s) & Rank & $\Delta$ JR & Tier \\
 \end{table}
 
 \begin{figure}[htbp]
-\centering
+\hspace*{-1.2cm}
 \begin{tikzpicture}[
     xscale=0.14,
     bar/.style={minimum height=0.7cm, anchor=west, font=\scriptsize},
@@ -1200,7 +1186,7 @@ This dissertation addressed makespan minimisation for LLM batch inference by for
 
 \section{Contributions}
 
-Five contributions are made: (1) a two-machine flow-shop formulation mapping model loading (I/O) and GPU inference (compute) to Johnson's framework; (2) a shared-aware algorithm grouping tasks by model and applying Johnson's Rule; (3) a checkpoint prefetching mechanism using the sllm-store pinned memory pool; (4) evaluation of prefetching across storage tiers (SSD, RAID, NFS); and (5) an OpenAI-compatible batch API extended for multi-model batches.
+Five contributions underpin this work: a two-machine flow-shop formulation mapping model loading and GPU inference to Johnson's framework; a shared-aware algorithm that groups tasks by model and applies Johnson's Rule; a checkpoint prefetching mechanism built on the sllm-store pinned memory pool; an evaluation of prefetching effectiveness across four storage tiers (SSD, RAID-0, and both 10 and 100\,GbE NFS); and an OpenAI-compatible batch API extended for multi-model batches.
 
 \section{Key Findings}
 
