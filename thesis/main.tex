@@ -170,7 +170,7 @@ Five contributions are made:
   \item \textbf{OpenAI-compatible batch API.} An extension of the ServerlessLLM API to accept multi-model batch submissions in OpenAI Batch API format, enabling drop-in migration from cloud batch services without client-side changes.
 \end{itemize}
 
-The project contributed approximately 3,500 lines of new Python code to the existing ServerlessLLM framework ($\sim$15K LoC). Evaluation shows the shared-aware strategy achieves a 276$\times$ speedup over FIFO for a 501-task batch (164.7\,s versus an extrapolated 45,495\,s), with speedup growing as batch size increases.
+The project contributed approximately 8,000 lines of new Python code to the existing ServerlessLLM framework ($\sim$15K LoC), with a further $\sim$8,000 lines of benchmark scripts and unit tests. Evaluation shows the shared-aware strategy achieves a 276$\times$ speedup over FIFO for a 501-task batch (164.7\,s versus an extrapolated 45,495\,s), with speedup growing as batch size increases.
 
 \section{Scope and Boundaries}
 
@@ -1114,7 +1114,7 @@ FIFO is unsuitable (over 99\% of execution time is consumed by model loading). M
 
 \section{New Contributions versus Reused Components}
 
-The ServerlessLLM framework ($\sim$15K LoC Python + C++) provides the API gateway, router, SQLite database, sllm-store (C++ with gRPC interface), Pylet worker process, autoscaler, and reconciler; vLLM handles GPU-level computation. New contributions total $\sim$3{,}500 lines: the \texttt{BatchScheduler} class ($\sim$1{,}400 lines) implementing model grouping, Johnson's Rule ordering, prefetch triggering with a memory-aware guard, semaphore-based admission control, greedy LPT multi-GPU assignment, and automatic tensor parallelism detection; the batch REST API following the OpenAI specification extended for multi-model batches; \texttt{StorageManager} prefetch integration; and all benchmark scripts, utilities, and unit tests (48 tests). The most substantial implementation challenges involved prefetch integration with the C++ gRPC interface and \texttt{cudaHostAlloc} semantics, GPU memory release (vLLM retains the CUDA context after logical cancellation, requiring nvidia-smi polling to confirm release), and obtaining reliable measurements on a shared cluster.
+The ServerlessLLM framework ($\sim$15K LoC Python + C++) provides the API gateway, router, SQLite database, sllm-store (C++ with gRPC interface), Pylet worker process, autoscaler, and reconciler; vLLM handles GPU-level computation. New contributions total $\sim$8{,}000 lines of core framework code: the \texttt{BatchScheduler} class ($\sim$1{,}600 lines) implementing model grouping, Johnson's Rule ordering, prefetch triggering with a memory-aware guard, semaphore-based admission control, greedy LPT multi-GPU assignment, and automatic tensor parallelism detection; the batch REST API following the OpenAI specification extended for multi-model batches; \texttt{StorageManager} prefetch integration; and all benchmark scripts, utilities, and unit tests (48 tests). The most substantial implementation challenges involved prefetch integration with the C++ gRPC interface and \texttt{cudaHostAlloc} semantics, GPU memory release (vLLM retains the CUDA context after logical cancellation, requiring nvidia-smi polling to confirm release), and obtaining reliable measurements on a shared cluster.
 
 \section{Design Trade-offs}
 
