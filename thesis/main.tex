@@ -897,8 +897,8 @@ A 90-task batch (30 tasks per model) used Qwen3-0.6B ($a=0.4$s, $b=15$s), Qwen3-
 Ordering & Makespan (s) & Rank & $\Delta$ JR & Tier \\
 \midrule
 \textbf{JR: 0.6B$\to$8B$\to$32B} & \textbf{132.4 $\pm$ 3.5} & \textbf{1/6} & \textbf{---} & 0.6B-first \\
-0.6B$\to$32B$\to$8B           & 132.9 $\pm$ 0.0 & 2/6 & +0.4\% & 0.6B-first \\
-8B$\to$32B$\to$0.6B           & 173.0 $\pm$ 0.0 & 3/6 & +30.7\% & 8B-first \\
+0.6B$\to$32B$\to$8B           & 132.9 $\pm$ 4.4 & 2/6 & +0.4\% & 0.6B-first \\
+8B$\to$32B$\to$0.6B           & 173.0 $\pm$ 2.8 & 3/6 & +30.7\% & 8B-first \\
 8B$\to$0.6B$\to$32B           & 175.7 $\pm$ 8.1 & 4/6 & +32.7\% & 8B-first \\
 32B$\to$8B$\to$0.6B           & 223.1 $\pm$ 8.7 & 5/6 & +68.5\% & 32B-first \\
 32B$\to$0.6B$\to$8B           & 227.8 $\pm$ 5.1 & 6/6 & +72.1\% & 32B-first \\
@@ -1002,7 +1002,7 @@ Ordering & Makespan (s) & Rank & $\Delta$ JR & Tier \\
 \node[font=\scriptsize, anchor=west] at (54, -4.5) {Prefetch (overlap)};
 
 \end{tikzpicture}
-\caption{Execution timeline comparison (schematic): worst-case vs Johnson's Rule ordering for a 3-model batch. Worst case (top) places the I/O-heavy 32B model first, forcing 21.7s of unmasked GPU idle before any inference begins. Johnson's Rule (bottom) places the compute-heavy 0.6B group first to start the 32B prefetch early, then executes 32B while the trivially small 8B checkpoint loads, then finishes with 8B. The residual gap (12.7s) is smaller than the worst-case upfront idle (21.7s). The schematic uses $n{=}5$-style processing times (0.6B compute window = 9\,s) where the 32B SSD load (21.7\,s) is not fully covered, leaving a 12.7\,s residual; at $n{=}30$, the longer compute window covers both loads completely. In the measured $n{=}30$ experiment (Table~\ref{tab:exp4_ordering_results}), the worst-tier orderings (32B-first) averaged 225.5\,s vs 132.4\,s for JR (0.6B$\to$8B$\to$32B), a 70.3\% difference; the spread across all six permutations is 95.4\,s.}
+\caption{Schematic execution timeline: worst-case (32B-first, top) vs Johnson's Rule (0.6B-first, bottom) ordering. Placing the largest model first forces an unmasked GPU idle at $t=0$; placing the smallest model first allows prefetching to begin immediately, reducing the residual gap.}
 \label{fig:exp4_ordering_gantt}
 \end{figure}
 
