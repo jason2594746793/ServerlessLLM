@@ -56,55 +56,59 @@ def save_fig(fig, name):
 # ══════════════════════════════════════════════════════════════════════════
 
 def figure_exp1():
-    """Broken-axis bar chart: 4-strategy ablation (500 tasks, 5 models)."""
-    strategies = ['FIFO', 'Model\nGrouping', 'Grouping\n+Prefetch', 'Shared-\nAware']
-    makespans = [78900.0, 1107.0, 697.0, 575.0]
-    stds = [2370.0, 22.0, 14.0, 11.5]
-    switches = ['499', '4', '4', '4']
-    speedups = ['1×', '71×', '113×', '137×']
-    colors = [MAGENTA, ORANGE, BLUE, GREEN]
+    """Broken-axis bar chart: 4-strategy ablation (501 tasks, 3 models)."""
+    strategies = ['FIFO\n(extrapolated)', 'Model\nGrouping', 'Grouping\n+Prefetch', 'Shared-\nAware']
+    makespans = [45495.0, 228.5, 206.8, 164.7]
+    stds     = [3353.0,  14.2,   4.6,   8.5]
+    switches = ['500', '2', '2', '2']
+    speedups = ['1×', '199×', '220×', '276×']
+    colors   = [MAGENTA, ORANGE, BLUE, GREEN]
 
     fig, (ax_top, ax_bot) = plt.subplots(
-        2, 1, sharex=True, figsize=(7, 5),
+        2, 1, sharex=True, figsize=(7, 5.5),
         gridspec_kw={'height_ratios': [1, 3.5], 'hspace': 0.08}
     )
 
-    # Top panel: FIFO only visible (75000–83000)
-    bars_top = ax_top.bar(strategies, makespans, yerr=stds, capsize=4,
-                          color=colors, edgecolor='black', linewidth=0.5,
-                          error_kw={'linewidth': 1.0})
-    ax_top.set_ylim(74000, 83000)
+    # Top panel: FIFO only visible
+    ax_top.bar(strategies, makespans, yerr=stds, capsize=4,
+               color=colors, edgecolor='black', linewidth=0.5,
+               error_kw={'linewidth': 1.0})
+    ax_top.set_ylim(40000, 51000)
     ax_top.tick_params(bottom=False)
     ax_top.set_ylabel('')
     ax_top.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda x, _: f'{int(x/1000)}k'))
 
     # Annotate FIFO value
-    ax_top.text(0, 78900 + 2370 + 500, '78,900s\n(22h)', ha='center',
+    ax_top.text(0, 45495 + 3353 + 400, '45,495s\n(12.6h)', ha='center',
                 va='bottom', fontsize=8, fontweight='bold')
 
-    # Bottom panel: non-FIFO bars (0–1400)
+    # Bottom panel: non-FIFO bars
     bars_bot = ax_bot.bar(strategies, makespans, yerr=stds, capsize=4,
                           color=colors, edgecolor='black', linewidth=0.5,
                           error_kw={'linewidth': 1.0})
-    ax_bot.set_ylim(-120, 1500)
+    ax_bot.set_ylim(0, 310)
     ax_bot.set_ylabel('Makespan (s)')
 
-    # Annotate non-FIFO values
+    # Annotate non-FIFO values above bars
     for i, (bar, val, std) in enumerate(zip(bars_bot, makespans, stds)):
         if i == 0:
             continue
         x = bar.get_x() + bar.get_width() / 2
-        ax_bot.text(x, val + std + 25, f'{int(val)}s', ha='center',
+        ax_bot.text(x, val + std + 4, f'{val:.1f}s', ha='center',
                     va='bottom', fontsize=8, fontweight='bold')
 
-    # Annotations below bars: switch count + speedup
-    for i, (sw, sp) in enumerate(zip(switches, speedups)):
-        ax_bot.text(i, -55, f'{sw} sw.', ha='center', fontsize=7, color='gray')
-        ax_bot.text(i, -95, sp, ha='center', fontsize=9, fontweight='bold',
-                    color=colors[i])
+    # Speedup + switch count annotated inside or just above bottom of each bar
+    for i, (sw, sp, color) in enumerate(zip(switches, speedups, colors)):
+        x = bars_bot[i].get_x() + bars_bot[i].get_width() / 2
+        # speedup below x-axis label via annotation box
+        ax_bot.annotate(f'{sp}\n{sw} sw.',
+                        xy=(x, 0), xytext=(x, -38),
+                        ha='center', va='top', fontsize=8,
+                        fontweight='bold', color=color,
+                        annotation_clip=False)
 
-    ax_bot.spines['bottom'].set_position(('data', 0))
+    ax_bot.set_ylim(0, 310)
 
     # Draw break lines
     d = 0.015
@@ -120,8 +124,9 @@ def figure_exp1():
     ax_bot.spines['top'].set_visible(False)
     ax_top.spines['right'].set_visible(False)
 
-    fig.suptitle('Scheduling Strategy Ablation (500 tasks, 5 models)',
-                 fontsize=12, fontweight='bold', y=0.99)
+    fig.suptitle('Scheduling Strategy Ablation (501 tasks, 3 models: 0.6B, 8B, 32B)',
+                 fontsize=11, fontweight='bold', y=0.99)
+    fig.subplots_adjust(bottom=0.18)
 
     save_fig(fig, 'figure_exp1_strategy_bar.pdf')
 
