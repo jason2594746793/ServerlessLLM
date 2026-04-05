@@ -170,7 +170,7 @@ Five contributions are made:
   \item \textbf{OpenAI-compatible batch API.} An extension of the ServerlessLLM API to accept multi-model batch submissions in OpenAI Batch API format, enabling drop-in migration from cloud batch services without client-side changes.
 \end{itemize}
 
-The project contributed approximately 8,000 lines of new Python code to the existing ServerlessLLM framework, with additional benchmark scripts and unit tests on top of that. 
+The project contributed approximately 5,000 lines of new Python code to the existing ServerlessLLM framework, with additional benchmark scripts and unit tests on top of that. 
 
 \section{Scope and Boundaries}
 
@@ -503,7 +503,7 @@ Given a batch $B = \{t_1, t_2, \ldots, t_n\}$, tasks are grouped by model to min
 \ENDFOR
 \end{algorithmic}
 
-This produces $k$ model groups $\{G_1, \ldots, G_k\}$ where each $G_i$ contains all tasks for one model, reducing switches from $O(n)$ to $O(k)$.
+This produces $k$ model groups $\{G_1, \ldots, G_k\}$ where each $G_i$ contains all tasks for one model, reducing switches from $O(n)$ to $O(k)$. Within each group, tasks are submitted to vLLM, which executes them via continuous batching: as one task completes, the next is admitted immediately without GPU idle time. A semaphore caps the number of concurrently queued tasks (default 10) to prevent the task queue from overwhelming GPU memory while keeping the engine fully utilised.
 
 \subsection{Phase 2: Johnson's Rule Ordering}
 \label{sec:johnsons_rule}
@@ -1135,7 +1135,7 @@ FIFO is unsuitable: over 99\% of execution time is consumed by model loading. Mo
 
 \section{New Contributions versus Reused Components}
 
-The ServerlessLLM framework provides the API gateway, router, SQLite database, sllm-store (C++ with gRPC interface), Pylet worker process, autoscaler, and reconciler; vLLM handles GPU-level computation. New contributions total $\sim$8{,}000 lines of core framework code: the \texttt{BatchScheduler} class ($\sim$1{,}600 lines) implementing model grouping, Johnson's Rule ordering, prefetch triggering with a memory-aware guard, semaphore-based admission control, greedy LPT multi-GPU assignment, and automatic tensor parallelism detection; the batch REST API following the OpenAI specification extended for multi-model batches; \texttt{StorageManager} prefetch integration; and all benchmark scripts, utilities, and unit tests (48 tests). The most substantial implementation challenges involved prefetch integration with the C++ gRPC interface and \texttt{cudaHostAlloc} semantics, GPU memory release (vLLM retains the CUDA context after logical cancellation, requiring nvidia-smi polling to confirm release), and obtaining reliable measurements on a shared cluster.
+The ServerlessLLM framework provides the API gateway, router, SQLite database, sllm-store (C++ with gRPC interface), Pylet worker process, autoscaler, and reconciler; vLLM handles GPU-level computation. New contributions total $\sim$5{,}000 lines of core framework code: the \texttt{BatchScheduler} class ($\sim$1{,}600 lines) implementing model grouping, Johnson's Rule ordering, prefetch triggering with a memory-aware guard, semaphore-based admission control, greedy LPT multi-GPU assignment, and automatic tensor parallelism detection; the batch REST API following the OpenAI specification extended for multi-model batches; \texttt{StorageManager} prefetch integration; and all benchmark scripts, utilities, and unit tests (48 tests). The most substantial implementation challenges involved prefetch integration with the C++ gRPC interface and \texttt{cudaHostAlloc} semantics, GPU memory release (vLLM retains the CUDA context after logical cancellation, requiring nvidia-smi polling to confirm release), and obtaining reliable measurements on a shared cluster.
 
 \section{Design Trade-offs}
 
