@@ -67,7 +67,7 @@ Large Language Model (LLM) batch workloads---model benchmarking, dataset labelli
 
 This dissertation formalises the batch scheduling problem as a two-machine flow-shop (I/O and GPU computation) and introduces three composable optimisations: (1)~model grouping reduces model switches from $O(n)$ to $O(k)$; (2)~Johnson's Rule ordering sequences model groups to maximise I/O-computation overlap; and (3)~checkpoint prefetching preloads the weights of the next model into CPU pinned memory while the current group executes.
 
-Evaluation on NVIDIA RTX A5000 GPUs shows that, for a 501-task batch spanning three models (0.6B--32B), model grouping reduces makespan by over 99\% versus FIFO (FIFO measured extrapolation: 45{,}495\,s; model grouping measured: 228.5\,s). Checkpoint prefetching hides the SSD I/O portion of model transitions, reducing makespan by a further $\sim$22\,s (9.5\%). Johnson's Rule ordering adds a further 20\% by placing model groups optimally for prefetch overlap, yielding a combined 276$\times$ speedup. The shared-aware strategy outperforms FIFO by 65--276$\times$ across measured batch sizes of 99--501 tasks and model sizes of 0.6B--32B, with speedup growing as batch size increases. Prefetching remains effective across storage tiers including 10\,GbE network storage, where 78.9\% of I/O read latency is analytically estimated to be hidden, demonstrating the viability of remote storage in production deployments.
+Evaluation on NVIDIA RTX A5000 GPUs shows that, for a 501-task batch spanning three models (0.6B--32B), model grouping reduces makespan by over 99\% versus FIFO (FIFO equivalent runtime: 45{,}495\,s, computed from direct cold-start measurements; model grouping measured: 228.5\,s). Checkpoint prefetching hides the SSD I/O portion of model transitions, reducing makespan by a further $\sim$22\,s (9.5\%). Johnson's Rule ordering adds a further 20\% by placing model groups optimally for prefetch overlap, yielding a combined 276$\times$ speedup. The shared-aware strategy outperforms FIFO by 65--276$\times$ across measured batch sizes of 99--501 tasks and model sizes of 0.6B--32B, with speedup growing as batch size increases. Prefetching remains effective across storage tiers including 10\,GbE network storage, where 78.9\% of I/O read latency is analytically estimated to be hidden, analytically projecting the viability of remote storage in production deployments.
 }
 
 \maketitle
@@ -170,7 +170,7 @@ Five contributions are made:
   \item \textbf{OpenAI-compatible batch API.} An extension of the ServerlessLLM API to accept multi-model batch submissions in OpenAI Batch API format, enabling drop-in migration from cloud batch services without client-side changes.
 \end{itemize}
 
-The project contributed approximately 5,000 lines of new Python code to the existing ServerlessLLM framework, with additional benchmark scripts and unit tests on top of that. 
+The project contributed approximately 2,700 lines of new core framework Python code to the existing ServerlessLLM framework, with additional benchmark scripts and unit tests on top of that.
 
 \section{Scope and Boundaries}
 
@@ -722,7 +722,7 @@ Table~\ref{tab:exp1_results} and Figure~\ref{fig:exp1_bar} show the results.
 \toprule
 Strategy & Makespan (s) & Throughput (req/s) & Switches & Speedup \\
 \midrule
-FIFO (meas.\ extrap.) & 45,495 $\pm$ 3,353 & 0.011 & 500 & 1$\times$ \\
+FIFO (computed) & 45,495 $\pm$ 3,353 & 0.011 & 500 & 1$\times$ \\
 Model Grouping & 228.5 $\pm$ 14.2 & 2.19 & 2 & 199$\times$ \\
 Grouping + Prefetch & 206.8 $\pm$ 4.6 & 2.42 & 2 & 220$\times$ \\
 Shared-Aware & 164.7 $\pm$ 8.5 & 3.04 & 2 & 276$\times$ \\
@@ -1135,11 +1135,11 @@ FIFO is unsuitable: over 99\% of execution time is consumed by model loading. Mo
 
 \section{New Contributions versus Reused Components}
 
-The ServerlessLLM framework provides the API gateway, router, SQLite database, sllm-store (C++ with gRPC interface), Pylet worker process, autoscaler, and reconciler; vLLM handles GPU-level computation. New contributions total $\sim$5{,}000 lines of core framework code: the \texttt{BatchScheduler} class ($\sim$1{,}600 lines) implementing model grouping, Johnson's Rule ordering, prefetch triggering with a memory-aware guard, semaphore-based admission control, greedy LPT multi-GPU assignment, and automatic tensor parallelism detection; the batch REST API following the OpenAI specification extended for multi-model batches; \texttt{StorageManager} prefetch integration; and all benchmark scripts, utilities, and unit tests (48 tests). The most substantial implementation challenges involved prefetch integration with the C++ gRPC interface and \texttt{cudaHostAlloc} semantics, GPU memory release (vLLM retains the CUDA context after logical cancellation, requiring nvidia-smi polling to confirm release), and obtaining reliable measurements on a shared cluster.
+The ServerlessLLM framework provides the API gateway, router, SQLite database, sllm-store (C++ with gRPC interface), Pylet worker process, autoscaler, and reconciler; vLLM handles GPU-level computation. New contributions total $\sim$2{,}700 lines of core framework code: the \texttt{BatchScheduler} class ($\sim$1{,}600 lines) implementing model grouping, Johnson's Rule ordering, prefetch triggering with a memory-aware guard, semaphore-based admission control, greedy LPT multi-GPU assignment, and automatic tensor parallelism detection; the batch REST API following the OpenAI specification extended for multi-model batches; \texttt{StorageManager} prefetch integration; and all benchmark scripts, utilities, and unit tests (48 tests). The most substantial implementation challenges involved prefetch integration with the C++ gRPC interface and \texttt{cudaHostAlloc} semantics, GPU memory release (vLLM retains the CUDA context after logical cancellation, requiring nvidia-smi polling to confirm release), and obtaining reliable measurements on a shared cluster.
 
 \section{Design Trade-offs}
 
-Experiment~1 demonstrates that any model-aware strategy dramatically outperforms FIFO (164.7\,s measured versus 45{,}495\,s extrapolated for 501 tasks, a 276$\times$ speedup), justifying the semaphore concurrency approach. The semaphore buffer size (default 10) trades GPU utilisation against memory pressure.
+Experiment~1 demonstrates that any model-aware strategy dramatically outperforms FIFO (164.7\,s measured versus 45{,}495\,s computed for 501 tasks, a 276$\times$ speedup), justifying the semaphore concurrency approach. The semaphore buffer size (default 10) trades GPU utilisation against memory pressure.
 
 Model grouping and Johnson's Rule ordering are independent: grouping provides the dominant benefit (199$\times$ speedup alone), and Johnson's Rule with prefetch adds a further $\sim$70\% protection against the worst-case ordering (32B-first tier) on top. Grouping alone is appropriate when I/O-time estimates are unreliable (e.g., under variable network bandwidth). Operating at the cluster-scheduler level ensures portability across vLLM, SGLang, and TensorRT-LLM without engine modifications, at the cost of not actively exploiting engine-level optimisations such as cross-group prefix cache reuse through scheduler-level task reordering.
 
