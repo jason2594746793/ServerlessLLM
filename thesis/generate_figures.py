@@ -370,7 +370,7 @@ def figure_exp5_storage():
     with_prefetch_ms = [30.9, 30.9, 33.6, 30.9]
     reductions = ['14.2%', '4.0%', '23.1%', '3.7%']
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 3.8))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 7))
 
     x = np.arange(len(tiers))
 
@@ -427,7 +427,7 @@ def figure_exp5_storage():
              fontstyle='italic', color='gray')
 
     fig.suptitle('Storage Tier Impact on Prefetching (8B model, 15.4 GB)',
-                 fontsize=12, fontweight='bold', y=1.02)
+                 fontsize=12, fontweight='bold')
     fig.tight_layout()
     save_fig(fig, 'figure_exp5_storage_tier.pdf')
 
