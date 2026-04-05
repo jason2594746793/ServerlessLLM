@@ -672,7 +672,14 @@ The shared-aware scheduling algorithm operates at the cluster scheduler level, a
 
 \chapter{Evaluation}
 
-Four falsifiable hypotheses are stated and tested through five experiments. H1 (model grouping dominates): model-grouped scheduling reduces makespan by at least 80\% over FIFO, because it eliminates redundant model switches from $O(n)$ to $O(k)$. H2 (prefetching hides I/O): checkpoint prefetching reduces the visible model-loading penalty by approximately 50\%, because I/O and compute proceed in parallel rather than sequentially. H3 (Johnson's Rule beats naive ordering): Johnson's Rule outperforms naive group orderings (alphabetical, size-descending) by at least 5\% on mixed-model batches, because it maximises prefetch overlap by placing compute-heavy groups first. H4 (gains are robust across scale): the makespan improvements from shared-aware scheduling persist as batch size grows from 99 to 501 tasks, confirming that scheduling overhead does not eliminate the benefit.
+Four falsifiable hypotheses are stated and tested through five experiments:
+
+\begin{itemize}
+  \item[\textbf{H1}] \textbf{Model grouping dominates:} model-grouped scheduling reduces makespan by at least 80\% over FIFO, because it eliminates redundant model switches from $O(n)$ to $O(k)$.
+  \item[\textbf{H2}] \textbf{Prefetching hides I/O:} checkpoint prefetching reduces the visible model-loading penalty by approximately 50\%, because I/O and compute proceed in parallel rather than sequentially.
+  \item[\textbf{H3}] \textbf{Johnson's Rule beats naive ordering:} Johnson's Rule outperforms naive group orderings (alphabetical, size-descending) by at least 5\% on mixed-model batches, because it maximises prefetch overlap by placing compute-heavy groups first.
+  \item[\textbf{H4}] \textbf{Gains are robust across scale:} the makespan improvements from shared-aware scheduling persist as batch size grows from 99 to 501 tasks, confirming that scheduling overhead does not eliminate the benefit.
+\end{itemize}
 
 
 \section{Experimental Setup}
