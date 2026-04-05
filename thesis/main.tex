@@ -824,7 +824,7 @@ With Prefetch & 140.3 $\pm$ 2.4 & 44.4 & 49.9\% \\
     node[midway, below, font=\scriptsize, cred] {81.2s saved};
 
 \end{tikzpicture}
-\caption{Execution timeline comparison (illustrative): without prefetch (top), the GPU idles during cold model loading between groups. With prefetch (bottom), checkpoint loading is overlapped with the current group's execution, reducing inter-group transition time. In the measured experiment (90 tasks, 3 models), prefetching cut the 8B$\to$32B transition from 115s to 52s.}
+\caption{Illustrative execution timeline: without prefetch the GPU idles during model loading; with prefetch, loading overlaps with the preceding group's computation, hiding most of the transition cost.}
 \label{fig:prefetch_timeline}
 \end{figure}
 
