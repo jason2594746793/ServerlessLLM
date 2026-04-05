@@ -198,7 +198,7 @@ Inference engines cache key-value tensors to avoid redundant computation. vLLM m
 \section{GPU Memory Hierarchy and Pinned Memory}
 \label{sec:bg_pinned_memory}
 
-Loading model weights proceeds in two stages: SSD to CPU RAM via filesystem I/O (2--5\,GB/s on NVMe), then CPU RAM to GPU VRAM via PCIe DMA (16--32\,GB/s on PCIe Gen4 x16). The CPU-to-GPU step is faster with pinned (page-locked) memory, allocated via \texttt{cudaHostAlloc} or \texttt{cudaHostRegister} \citep{cuda_guide2024}, which enables direct DMA without intermediate copies. The sllm-store component of ServerlessLLM \citep{fu2024serverlessllm} pre-allocates a pinned memory pool at startup; weights are loaded into this pool via multi-threaded I/O and transferred to the GPU via DMA, achieving near-peak PCIe bandwidth.
+Loading model weights involves up to three stages: remote storage (object stores such as S3, or NFS) to local SSD when models are not cached locally, then local SSD to CPU RAM via filesystem I/O (2--5\,GB/s on NVMe), and finally CPU RAM to GPU VRAM via PCIe DMA (16--32\,GB/s on PCIe Gen4 x16). In deployments where models are cached on local SSD, only the latter two stages are on the critical path. The CPU-to-GPU step is faster with pinned (page-locked) memory, allocated via \texttt{cudaHostAlloc} or \texttt{cudaHostRegister} \citep{cuda_guide2024}, which enables direct DMA without intermediate copies. The sllm-store component of ServerlessLLM \citep{fu2024serverlessllm} pre-allocates a pinned memory pool at startup; weights are loaded into this pool via multi-threaded I/O and transferred to the GPU via DMA, achieving near-peak PCIe bandwidth.
 
 \section{Serverless Computing and Cold Starts}
 
