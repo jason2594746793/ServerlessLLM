@@ -483,7 +483,7 @@ Three constraints apply: each worker loads at most one model at a time; model sw
 
 \section{Problem Analysis: Shared Structure in Batches}
 
-The formal problem definition above establishes two sharing relationships. Model sharing has first-order impact: since $L_{load}$ is 100--200$\times$ larger than $L_{infer}$ (Section~\ref{sec:bg_serverlessllm}), eliminating switches from $O(n)$ to $O(k)$ dominates all other optimisations. Prefix sharing is a second-order effect: prefix caching reduces prefill time from $\sim$2\,s to $\sim$0.05\,s per task, which is negligible compared to the 80--120\,s model-switch cost; prefix-aware ordering within groups is therefore deferred to future work (Chapter~\ref{ch:future}).
+The formal problem definition above establishes two sharing relationships. Model sharing has first-order impact: since $L_{load}$ is 100--200$\times$ larger than $L_{infer}$ (Section~\ref{sec:bg_serverlessllm}), eliminating switches from $O(n)$ to $O(k)$ dominates all other optimisations. Prefix sharing is a second-order effect: vLLM's built-in prefix caching already reduces prefill time from $\sim$2\,s to $\sim$0.05\,s per task for cache hits, which is negligible compared to the 80--120\,s model-switch cost. What is deferred to future work is \emph{scheduler-level} prefix-aware task ordering within groups to maximise the cache hit rate (Chapter~\ref{ch:future}).
 
 \section{Shared-Aware Scheduling Algorithm}
 
