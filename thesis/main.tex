@@ -356,17 +356,19 @@ Figure~\ref{fig:system_arch} illustrates the system architecture.
     dbbox/.style={box, fill=cbluelight!50, draw=cblue!70!black},
     arr/.style={-{Stealth[length=5pt]}, thick},
     region/.style={draw, dashed, rounded corners=10pt, inner sep=14pt, thick},
+    newbox/.style={box, fill=camber!30, draw=camber!80!black},
+    extbox/.style={box, fill=cpurplelight, draw=cpurple!70},
 ]
 
 % User / Client
 \node[box, fill=cgraylight] (user) {User / Client};
 
 % Head Node — gateway centred at top; 2×2 grid below
-\node[headbox, below=1.4cm of user] (gateway) {API Gateway};
+\node[extbox, below=1.4cm of user] (gateway) {API Gateway};
 
 % Row 2: scheduler (left) and storage_mgr (right), symmetric about x=0
-\node[headbox, below=1.1cm of gateway, xshift=-2.5cm] (scheduler) {BatchScheduler};
-\node[headbox, right=2.0cm of scheduler]              (storage_mgr) {StorageManager};
+\node[newbox, below=1.1cm of gateway, xshift=-2.5cm] (scheduler) {BatchScheduler};
+\node[extbox, right=2.0cm of scheduler]              (storage_mgr) {StorageManager};
 
 % Row 3: router under scheduler, db under storage_mgr
 \node[headbox, below=1.1cm of scheduler] (router) {Router};
@@ -428,6 +430,17 @@ Figure~\ref{fig:system_arch} illustrates the system architecture.
 \draw[arr, cgreen]        (ssd.north) -- (w1.south);
 \draw[arr, cgreen]        (ssd.north) -- (w2.south);
 \draw[arr, cgreen, dashed] (nfs.north) -- (wn.south);
+
+% ── Contribution legend ──
+\node[draw=black!40, fill=cbluelight, minimum width=0.45cm, minimum height=0.28cm, inner sep=0, anchor=east]
+    (ll_e) at ($(ssd.south) + (-0.6, -0.75)$) {};
+\node[font=\scriptsize, anchor=west] at (ll_e.east) {\;Existing};
+\node[draw=cpurple!70, fill=cpurplelight, minimum width=0.45cm, minimum height=0.28cm, inner sep=0, anchor=west]
+    (ll_x) at ($(ll_e.east) + (1.6, 0)$) {};
+\node[font=\scriptsize, anchor=west] at (ll_x.east) {\;Extended (this work)};
+\node[draw=camber!80!black, fill=camber!30, minimum width=0.45cm, minimum height=0.28cm, inner sep=0, anchor=west]
+    (ll_n) at ($(ll_x.east) + (2.8, 0)$) {};
+\node[font=\scriptsize, anchor=west] at (ll_n.east) {\;New (this work)};
 
 \end{tikzpicture}
 \caption{System architecture. The BatchScheduler groups tasks by model, applies Johnson's Rule ordering, and persists job state to a SQLite database. The Router queries the same database for healthy worker endpoints. The StorageManager triggers asynchronous checkpoint prefetching (\texttt{prefetch\_to\_cpu}) to worker nodes ahead of execution. Workers run vLLM with sllm-store for pinned-memory checkpoint management.}
