@@ -163,11 +163,11 @@ Three research questions are addressed:
 Five contributions are made:
 
 \begin{itemize}
-  \item \textbf{Two-machine flow-shop formulation.} The batch scheduling problem is formalised with Machine~A as I/O (loading model weights) and Machine~B as GPU computation, enabling Johnson's Rule for provably optimal model group ordering.
-  \item \textbf{Shared-aware scheduling algorithm.} A scheduler discovers model-sharing relationships within a batch, groups tasks by model to reduce switches from $O(n)$ to $O(k)$, and orders groups by Johnson's Rule to maximise I/O-computation overlap.
-  \item \textbf{Checkpoint prefetching mechanism.} Using the pinned memory pool of ServerlessLLM, the next model's weights are preloaded while the current group executes on GPU, hiding I/O latency through pipelining.
-  \item \textbf{Storage tier analysis and evaluation.} The prefetch architecture is analysed and evaluated across storage tiers including RAID-0, 10\,GbE NFS, and 100\,GbE NFS, demonstrating that it generalises to network-attached storage.
-  \item \textbf{OpenAI-compatible batch API.} A multi-model batch REST API enables clients to submit heterogeneous task lists in a single request and receive results asynchronously, following the OpenAI Batch API specification.
+  \item \textbf{Two-machine flow-shop formulation.} The batch scheduling problem is formalised as a two-machine flow-shop, mapping model loading to Machine~A (I/O) and GPU inference to Machine~B (compute). This mapping is the theoretical basis that justifies applying Johnson's Rule for provably optimal group ordering.
+  \item \textbf{Shared-aware scheduling algorithm.} A cluster-level scheduler that groups tasks by model, reducing switches from $O(n)$ to $O(k)$, then applies the flow-shop formulation above to determine the optimal group execution order and trigger prefetching.
+  \item \textbf{Checkpoint prefetching mechanism.} An implementation that uses the ServerlessLLM pinned memory pool to load the next model's checkpoint from SSD into CPU memory during the current group's GPU execution, hiding the I/O stage of each model transition.
+  \item \textbf{Storage tier characterisation.} An analysis and end-to-end evaluation of prefetching effectiveness across four storage tiers (NVMe, RAID-0, 10\,GbE NFS, 100\,GbE NFS), quantifying how storage bandwidth affects the overlap window and residual transition cost.
+  \item \textbf{OpenAI-compatible batch API.} An extension of the ServerlessLLM API to accept multi-model batch submissions in OpenAI Batch API format, enabling drop-in migration from cloud batch services without client-side changes.
 \end{itemize}
 
 The project contributed approximately 3,500 lines of new Python code to the existing ServerlessLLM framework ($\sim$15K LoC). Evaluation shows the shared-aware strategy achieves a 276$\times$ speedup over FIFO for a 501-task batch (164.7\,s versus an extrapolated 45,495\,s), with speedup growing as batch size increases.
