@@ -1123,15 +1123,15 @@ The three optimisations compose multiplicatively: model grouping provides first-
 
 \section{Answering the Research Questions}
 
-\paragraph{RQ1: How to Discover and Exploit Shared Structure?}
+\textbf{RQ1: How to Discover and Exploit Shared Structure?}
 
 Model grouping exploits the model-sharing structure formalised in Chapter~3 (Section~\ref{sec:problem_definition}), reducing switches from $O(n)$ to $O(k)$ for a 99\% makespan reduction (Experiment~1). The advantage grows with batch size as larger batches amortise the two fixed model-loading transitions over more tasks (Experiment~3).
 
-\paragraph{RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}
+\textbf{RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}
 
 Yes. The problem maps to a two-machine flow-shop (Machine~A: I/O, Machine~B: GPU). Prefetching implements the I/O-compute overlap, reducing makespan by 36.6\% and hiding approximately half of cold-switch latency (Experiment~2). Johnson's Rule ranks 1/6 (empirical optimum) among all $3!=6$ permutations, with 32B-first orderings averaging 70.3\% slower and 8B-first orderings averaging 31.7\% slower relative to the JR optimal ordering, and the spread across all permutations is 95.4\,s (Experiment~4).
 
-\paragraph{RQ3: How Do Strategies Compare?}
+\textbf{RQ3: How Do Strategies Compare?}
 
 FIFO is unsuitable (over 99\% of execution time is consumed by model loading). Model Grouping delivers deterministic first-order improvement (199$\times$). The Shared-Aware strategy adds I/O-computation overlap, with speedup growing from 65$\times$ to 276$\times$ across measured batch sizes (Experiment~3a). Johnson's Rule ranks 1/6 (empirical optimum) among all 6 permutations, avoiding the 32B-first penalty ($\sim$70\%) and the 8B-first penalty ($\sim$32\%), with the full permutation spread demonstrating 95.4\,s ordering sensitivity (Experiment~4).
 
@@ -1155,17 +1155,17 @@ In the schematic diagram (Figure~\ref{fig:exp4_ordering_gantt}), using stylised 
 
 \section{Threats to Validity}
 
-\paragraph{Internal Validity}
+\textbf{Internal Validity}
 Experiments were conducted on a shared cluster; other users' processes and I/O could affect timing. Each data point is the mean of 3 independent runs with cold-start verification; standard deviations are reported.
 
 Prefetching and Johnson's Rule require diverse checkpoint sizes to produce meaningful variation; with similarly-sized models on fast SSD, I/O costs are small relative to compute and ordering has limited effect. Experiment~3 demonstrates scaling from 99 to 501 tasks with speedup growing from 65$\times$ to 276$\times$; larger-scale projections are indicative due to two-point calibration.
 
 The FIFO extrapolation relies on cold-start sampling with explicit GPU release between tasks (6 tasks, 3 runs). The 32B cold-start showed substantial run-to-run variance (CV\,$\approx$\,21\%), likely due to non-deterministic TP=4 vLLM initialisation (NCCL setup, GPU memory allocation); the propagated $\pm$3{,}353\,s uncertainty is reported in Table~\ref{tab:exp1_results}. The extrapolation is cross-validated against the independently measured 115.2\,s transition gap (8B$\to$32B) from Experiment~2, confirming that 32B cold-load overhead dominates the per-switch cost. The explicit GPU-release protocol between tasks may slightly understate the true FIFO switch cost (omitting model unload time, typically 3--6\,s per transition), making the reported extrapolation a conservative lower bound.
 
-\paragraph{External Validity}
+\textbf{External Validity}
 Results cover three Qwen models on one hardware configuration (RTX A5000, NVMe SSD) and may not generalise to mixture-of-experts architectures, other storage technologies (Lustre, CephFS), or larger clusters. Johnson's Rule optimality holds for any $k$ by theory; the experimental evaluation covers $k=3$ model groups, and generalisation to $k>3$ is left for future work. Faster storage would reduce the absolute benefit of grouping, though the relative advantage remains consistent.
 
-\paragraph{Construct Validity}
+\textbf{Construct Validity}
 Makespan does not capture per-task latency distribution, resource cost, or fairness; a multi-objective evaluation would be more appropriate for production. The flow-shop model also assumes no preemption and fixed group sizes; relaxing these would require open-shop or flexible flow-shop theory.
 
 
