@@ -370,7 +370,7 @@ def figure_exp5_storage():
     with_prefetch_ms = [30.9, 30.9, 33.6, 30.9]
     reductions = ['14.2%', '4.0%', '23.1%', '3.7%']
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(6.5, 4.8))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(6, 4.2))
 
     x = np.arange(len(tiers))
 
