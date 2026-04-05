@@ -170,11 +170,11 @@ Five contributions are made:
   \item \textbf{OpenAI-compatible batch API.} An extension of the ServerlessLLM API to accept multi-model batch submissions in OpenAI Batch API format, enabling drop-in migration from cloud batch services without client-side changes.
 \end{itemize}
 
-The project contributed approximately 8,000 lines of new Python code to the existing ServerlessLLM framework, with additional benchmark scripts and unit tests on top of that. Evaluation shows the shared-aware strategy achieves a 276$\times$ speedup over FIFO for a 501-task batch (164.7\,s versus an extrapolated 45,495\,s), with speedup growing as batch size increases.
+The project contributed approximately 8,000 lines of new Python code to the existing ServerlessLLM framework, with additional benchmark scripts and unit tests on top of that. 
 
 \section{Scope and Boundaries}
 
-This work focuses strictly on cluster-level scheduling. The inference engine is neither modified nor optimised; KV cache management, prefill-decode separation, continuous batching internals, and GPU kernel optimisations are out of scope. The scheduler decides which tasks to execute, in what order, and on which workers; vLLM handles the computation. Scheduler-level optimisations are complementary to engine-level optimisations and require no engine modification. The formal problem definition---optimisation objective, inputs, and constraints---is given in Chapter~3 (Section~\ref{sec:problem_definition}).
+This work focuses strictly on cluster-level scheduling. The inference engine is neither modified nor optimised, KV cache management, prefill-decode separation, continuous batching internals, and GPU kernel optimisations are out of scope. The scheduler decides which tasks to execute, in what order, and on which workers; vLLM handles the computation. Scheduler-level optimisations are complementary to engine-level optimisations and require no engine modification.  
 
 
 % ============================================================================
@@ -186,7 +186,7 @@ This work focuses strictly on cluster-level scheduling. The inference engine is 
 
 \section{Transformer-Based LLM Inference}
 
-LLMs are built on the transformer architecture \citep{vaswani2017attention}, generating tokens autoregressively via a compute-bound prefill phase ($O(L^2)$ attention) followed by a memory-bandwidth-bound decode phase (one token per step). Modern LLMs range from 0.5B to 405B parameters \citep{brown2020language, touvron2023llama}; an 8B model requires $\sim$15\,GB in FP16 and a 70B model $\sim$140\,GB.
+LLMs are built on the transformer architecture \citep{vaswani2017attention}, generating tokens autoregressively via a compute-bound prefill phase ($O(L^2)$ attention) followed by a memory-bandwidth-bound decode phase (one token per step). Modern LLMs span from under 1B to hundreds of billions of parameters, with the landscape expanding rapidly; an 8B model requires $\sim$15\,GB in FP16 and a 70B model $\sim$140\,GB.
 
 vLLM \citep{kwon2023efficient} introduced continuous batching (iteration-level scheduling), inserting new requests at every decode step to maintain near-full GPU utilisation within a single loaded model. vLLM does not address switching between models. Tensor parallelism \citep{shoeybi2019megatron} shards weight matrices across multiple GPUs for models exceeding the VRAM of a single GPU; this work assumes each model fits within one GPU, and tensor parallelism can be combined with the proposed scheduler when needed.
 
