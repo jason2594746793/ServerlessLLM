@@ -385,7 +385,7 @@ def figure_exp5_storage():
     ax1.set_xticklabels(tiers)
     ax1.set_ylabel('Loading Time (s)')
     ax1.set_title('(a) Loading Time Decomposition', fontsize=11)
-    ax1.legend(loc='upper right', fontsize=8)
+    ax1.legend(loc='upper left', fontsize=8)
 
     # Annotate prefetch hidden %
     for i, (rt, dt, ph) in enumerate(zip(read_times, dma_times, prefetch_hidden)):
@@ -410,16 +410,16 @@ def figure_exp5_storage():
     ax2.set_xticks(x)
     ax2.set_xticklabels(tiers)
     ax2.set_ylabel('Makespan (s)')
-    ax2.set_ylim(25, 50)
+    ax2.set_ylim(25, 52)
     ax2.set_title('(b) End-to-End Makespan (60 tasks, 2 models)', fontsize=11)
     ax2.legend(loc='upper left', fontsize=8)
 
-    # Annotate reduction %
+    # Annotate reduction % above each bar pair
     for i, (np_v, wp_v, red) in enumerate(
             zip(no_prefetch_ms, with_prefetch_ms, reductions)):
-        mid_y = (np_v + wp_v) / 2
-        ax2.annotate(f'−{red}', xy=(i, mid_y), ha='center',
-                     fontsize=8, fontweight='bold', color=GREEN)
+        top_y = max(np_v, wp_v) + 0.6
+        ax2.annotate(f'savings: −{red}', xy=(i, top_y), ha='center',
+                     fontsize=7.5, fontweight='bold', color=GREEN)
 
     # Note about y-axis
     ax2.text(0.98, 0.02, 'Y-axis starts at 25s',
