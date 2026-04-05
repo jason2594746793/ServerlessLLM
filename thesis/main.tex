@@ -371,8 +371,8 @@ Figure~\ref{fig:system_arch} illustrates the system architecture.
 \node[extbox, right=2.0cm of scheduler]              (storage_mgr) {StorageManager};
 
 % Row 3: router under scheduler, db under storage_mgr
-\node[headbox, below=1.1cm of scheduler] (router) {Router};
-\node[dbbox,   below=1.1cm of storage_mgr] (db) {SQLite DB\\{\scriptsize state.db}};
+\node[extbox, below=1.1cm of scheduler] (router) {Router};
+\node[extbox,  below=1.1cm of storage_mgr, draw=cpurple!70] (db) {SQLite DB\\{\scriptsize state.db}};
 
 % Head node background
 \begin{scope}[on background layer]
