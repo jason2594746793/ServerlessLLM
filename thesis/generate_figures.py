@@ -136,15 +136,17 @@ def figure_exp1():
 # ══════════════════════════════════════════════════════════════════════════
 
 def figure_exp3_orderings():
-    """Horizontal bar chart: all 6 permutations — measured vs predicted."""
-    # (label, measured, std, predicted, tag)
+    """Horizontal bar chart: all 6 permutations — measured makespan.
+    Data from Table 4.2 (thesis): 90 tasks, 3 models, prefetch ON, cold start.
+    """
+    # (label, measured, std, tag)
     orderings = [
-        ('0.6B → 8B → 32B', 68.3, 1.0, 67.1, "Johnson's Rule (optimal)"),
-        ('8B → 32B → 0.6B', 73.2, 1.1, 71.8, ''),
-        ('0.6B → 32B → 8B', 74.8, 1.2, 73.1, ''),
-        ('8B → 0.6B → 32B', 79.1, 1.3, 77.8, ''),
-        ('32B → 0.6B → 8B', 83.1, 1.4, 81.7, 'Alphabetical (default)'),
-        ('32B → 8B → 0.6B', 83.4, 1.4, 81.7, 'Size-descending'),
+        ('0.6B → 8B → 32B', 132.4, 3.5, "Johnson's Rule (optimal)"),
+        ('0.6B → 32B → 8B', 132.9, 0.0, ''),
+        ('8B → 32B → 0.6B', 173.0, 0.0, ''),
+        ('8B → 0.6B → 32B', 175.7, 8.1, ''),
+        ('32B → 8B → 0.6B', 223.1, 8.7, 'Size-descending'),
+        ('32B → 0.6B → 8B', 227.8, 5.1, 'Alphabetical (default)'),
     ]
 
     # Best at top → reverse for barh
@@ -152,52 +154,45 @@ def figure_exp3_orderings():
     labels = [o[0] for o in orderings_rev]
     vals = [o[1] for o in orderings_rev]
     errs = [o[2] for o in orderings_rev]
-    preds = [o[3] for o in orderings_rev]
-    tags = [o[4] for o in orderings_rev]
+    tags = [o[3] for o in orderings_rev]
 
     fig, ax = plt.subplots(figsize=(8, 3.8))
 
     bar_colors = []
     for o in orderings_rev:
-        if 'optimal' in o[4]:
+        if 'optimal' in o[3]:
             bar_colors.append(GREEN)
-        elif 'default' in o[4] or 'descending' in o[4]:
+        elif 'default' in o[3] or 'descending' in o[3]:
             bar_colors.append(MAGENTA)
         else:
             bar_colors.append(BLUE)
 
-    bars = ax.barh(range(len(labels)), vals, xerr=errs, capsize=3,
-                   color=bar_colors, edgecolor='black', linewidth=0.5,
-                   height=0.55, error_kw={'linewidth': 1.0},
-                   label='Measured', zorder=3)
-
-    # Overlay predicted as diamond markers
-    ax.scatter(preds, range(len(labels)), marker='D', color='black',
-               s=25, zorder=5, label='Predicted (flow-shop model)')
+    ax.barh(range(len(labels)), vals, xerr=errs, capsize=3,
+            color=bar_colors, edgecolor='black', linewidth=0.5,
+            height=0.55, error_kw={'linewidth': 1.0},
+            label='Measured', zorder=3)
 
     ax.set_yticks(range(len(labels)))
     ax.set_yticklabels(labels, fontsize=9)
     ax.set_xlabel('Makespan (s)')
-    ax.set_xlim(62, 90)
+    ax.set_xlim(120, 260)
 
-    jr_val = 68.3
+    jr_val = 132.4
     for i, (val, err, tag) in enumerate(zip(vals, errs, tags)):
         pct = ((val - jr_val) / jr_val) * 100
         if pct > 0:
-            ax.text(val + err + 0.4, i, f'+{pct:.1f}%',
+            ax.text(val + err + 1.5, i, f'+{pct:.1f}%',
                     va='center', fontsize=8, color='gray')
         else:
-            ax.text(val + err + 0.4, i, 'optimal',
+            ax.text(val + err + 1.5, i, 'optimal',
                     va='center', fontsize=8, fontweight='bold', color=GREEN)
         if tag:
-            ax.text(val - 0.4, i + 0.32, tag, va='center', ha='right',
+            ax.text(val - 1.5, i + 0.32, tag, va='center', ha='right',
                     fontsize=7, fontstyle='italic', color='gray')
 
-    ax.legend(loc='lower right', fontsize=8, framealpha=0.9)
-    ax.set_title("Johnson's Rule Ordering Ablation (90 tasks, 3 models)\n"
-                 "Mean model prediction error: 1.9%",
+    ax.set_title("Johnson's Rule Ordering Ablation (90 tasks, 3 models: 0.6B, 8B, 32B)",
                  fontsize=11, fontweight='bold')
-    ax.text(0.98, 0.02, 'X-axis starts at 62s',
+    ax.text(0.98, 0.02, 'X-axis starts at 120s',
             transform=ax.transAxes, fontsize=7, ha='right', va='bottom',
             fontstyle='italic', color='gray')
 
@@ -210,83 +205,93 @@ def figure_exp3_orderings():
 # ══════════════════════════════════════════════════════════════════════════
 
 def figure_exp4a_scalability():
-    """Dual Y-axis line plot: FIFO, Grouping, Shared-Aware + Speedup (production scale)."""
-    batch_sizes = [100, 500, 1000, 5000, 10000]
+    """Dual Y-axis line plot: FIFO, Grouping, Shared-Aware + Speedup.
+    Two measured points (n=99, n=501) plus one projected point (n=1000).
+    Data from Table 4.3 (thesis).
+    """
+    # Measured anchor points
+    measured_n     = [99,    501   ]
+    fifo_meas      = [8920,  45495 ]
+    fifo_meas_std  = [None,  3353  ]   # n=99 std not separately reported
+    group_meas     = [220.1, 228.5 ]
+    group_meas_std = [5.9,   14.2  ]
+    sa_meas        = [136.3, 164.7 ]
+    sa_meas_std    = [5.8,   8.5   ]
+    speedups_meas  = [65,    276   ]
 
-    fifo_ms = [15804, 79020, 158040, 790200, 1580400]
-    fifo_std = [474, 2370, 4741, 23706, 47412]
-
-    group_ms = [851, 1107, 1427, 3987, 7187]
-    group_std = [17, 22, 28.5, 79.7, 143.7]
-
-    sa_ms = [324, 575, 895, 3455, 6655]
-    sa_std = [6.5, 11.5, 17.9, 69.1, 133.1]
-
-    speedups = [f / s for f, s in zip(fifo_ms, sa_ms)]
+    # Projected point (n=1000, from calibrated C(n) equations)
+    proj_n    = [1000]
+    fifo_proj = [90300]
+    group_proj = [239]
+    sa_proj   = [200]
+    speedup_proj = [452]
 
     fig, ax1 = plt.subplots(figsize=(8, 4.5))
-
     ax1.set_yscale('log')
     ax1.set_xscale('log')
     ax1.set_ylabel('Makespan (s, log scale)')
-    ax1.set_xlabel('Batch Size (tasks, log scale)')
+    ax1.set_xlabel('Batch Size (tasks)')
 
-    # FIFO
-    ax1.errorbar(batch_sizes, fifo_ms, yerr=fifo_std, fmt='^-',
+    all_n = measured_n + proj_n
+
+    # ── FIFO ──
+    ax1.errorbar(measured_n, fifo_meas,
+                 yerr=[0, 3353], fmt='^-',
                  color=MAGENTA, linewidth=1.8, markersize=7, capsize=4,
-                 label='FIFO', zorder=3)
-    ax1.fill_between(batch_sizes,
-                     [m - s for m, s in zip(fifo_ms, fifo_std)],
-                     [m + s for m, s in zip(fifo_ms, fifo_std)],
-                     alpha=0.12, color=MAGENTA)
+                 label='FIFO (extrapolated)', zorder=3)
+    ax1.plot(proj_n, fifo_proj, '^--', color=MAGENTA,
+             markersize=7, linewidth=1.2, alpha=0.5)
 
-    # Model Grouping
-    ax1.errorbar(batch_sizes, group_ms, yerr=group_std, fmt='s-',
+    # ── Model Grouping ──
+    ax1.errorbar(measured_n, group_meas, yerr=group_meas_std, fmt='s-',
                  color=ORANGE, linewidth=1.8, markersize=6, capsize=4,
                  label='Model Grouping', zorder=3)
-    ax1.fill_between(batch_sizes,
-                     [m - s for m, s in zip(group_ms, group_std)],
-                     [m + s for m, s in zip(group_ms, group_std)],
-                     alpha=0.12, color=ORANGE)
+    ax1.plot(proj_n, group_proj, 's--', color=ORANGE,
+             markersize=6, linewidth=1.2, alpha=0.5)
 
-    # Shared-Aware
-    ax1.errorbar(batch_sizes, sa_ms, yerr=sa_std, fmt='o-',
+    # ── Shared-Aware ──
+    ax1.errorbar(measured_n, sa_meas, yerr=sa_meas_std, fmt='o-',
                  color=BLUE, linewidth=1.8, markersize=6, capsize=4,
                  label='Shared-Aware', zorder=3)
-    ax1.fill_between(batch_sizes,
-                     [m - s for m, s in zip(sa_ms, sa_std)],
-                     [m + s for m, s in zip(sa_ms, sa_std)],
-                     alpha=0.12, color=BLUE)
+    ax1.plot(proj_n, sa_proj, 'o--', color=BLUE,
+             markersize=6, linewidth=1.2, alpha=0.5)
+
+    # Projected label
+    ax1.text(1000, 45000, 'projected →', fontsize=7, color='gray',
+             fontstyle='italic', ha='right')
+
+    ax1.set_xticks([99, 501, 1000])
+    ax1.set_xticklabels(['99', '501', '1,000'])
+    ax1.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _:
+            f'{x/3600:.1f}h' if x >= 3600 else f'{int(x):,}s'))
+
+    # 1-hour reference line
+    ax1.axhline(3600, color='gray', linestyle=':', linewidth=0.8, alpha=0.5)
+    ax1.text(105, 3600 * 1.15, '1 hour', fontsize=7, color='gray')
 
     ax1.legend(loc='upper left', framealpha=0.9)
-    ax1.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda x, _: f'{int(x):,}s' if x < 10000 else
-                          f'{x/3600:.0f}h' if x >= 3600 else f'{int(x)}s'))
 
-    # Right Y-axis: speedup
+    # ── Right Y-axis: speedup ──
     ax2 = ax1.twinx()
     ax2.spines['right'].set_visible(True)
-    ax2.semilogx(batch_sizes, speedups, 'D--', color=GREEN, linewidth=1.5,
-                 markersize=6, label='Speedup (FIFO/SA)', alpha=0.85)
+    ax2.semilogx(measured_n, speedups_meas, 'D-', color=GREEN,
+                 linewidth=1.5, markersize=6, label='Speedup (FIFO/SA)')
+    ax2.semilogx(proj_n, speedup_proj, 'D--', color=GREEN,
+                 linewidth=1.2, markersize=6, alpha=0.5)
     ax2.set_ylabel('Speedup (×)', color=GREEN)
     ax2.tick_params(axis='y', labelcolor=GREEN)
 
-    for bs, sp in zip(batch_sizes, speedups):
-        ax2.annotate(f'{sp:.0f}×', xy=(bs, sp), xytext=(4, 5),
-                     textcoords='offset points', fontsize=7,
+    for n, sp in zip(measured_n + proj_n, speedups_meas + speedup_proj):
+        ax2.annotate(f'{sp}×', xy=(n, sp), xytext=(5, 4),
+                     textcoords='offset points', fontsize=8,
                      color=GREEN, fontweight='bold')
 
-    ax2.set_ylim(0, 280)
+    ax2.set_ylim(0, 550)
     ax2.legend(loc='center right', framealpha=0.9)
 
-    # Add horizontal dashed line at 1h and 1 day for reference
-    ax1.axhline(3600, color='gray', linestyle=':', linewidth=0.8, alpha=0.5)
-    ax1.text(9500, 3600*1.08, '1 hour', fontsize=7, color='gray', ha='right')
-    ax1.axhline(86400, color='gray', linestyle=':', linewidth=0.8, alpha=0.5)
-    ax1.text(9500, 86400*1.08, '1 day', fontsize=7, color='gray', ha='right')
-
-    fig.suptitle('Scalability: Makespan vs Batch Size (5 models)',
-                 fontsize=12, fontweight='bold', y=0.99)
+    fig.suptitle('Scalability: Makespan vs Batch Size (3 models: 0.6B, 8B, 32B)',
+                 fontsize=11, fontweight='bold', y=0.99)
 
     save_fig(fig, 'figure_exp5_scalability.pdf')
 
