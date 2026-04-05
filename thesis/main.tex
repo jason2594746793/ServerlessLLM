@@ -474,7 +474,7 @@ Tasks \texttt{t1} and \texttt{t3} share the same model and can execute consecuti
 
 The input consists of a batch of $n$ tasks $B = \{t_1, t_2, \ldots, t_n\}$, where each task $t_i = (m_i, p_i, \theta_i)$ specifies a target model $m_i$, prompt $p_i$, and generation parameters $\theta_i$. The cluster contains $k$ GPU workers $W = \{w_1, w_2, \ldots, w_k\}$; each worker loads at most one model at a time with loading latency $L_{load}(m)$, and the inference latency of task $t_i$ is $L_{infer}(t_i)$.
 
-Two sharing relationships exist within a batch. Model sharing arises when $m_i = m_j$: tasks $t_i$ and $t_j$ can share loaded model weights, avoiding redundant loading; this is the primary relationship exploited in this work. Prefix sharing arises when $\text{prefix}(p_i) = \text{prefix}(p_j)$, enabling inference engine cache reuse; this is a secondary relationship identified but not exploited here (see Chapter~\ref{ch:future}).
+Two sharing relationships exist within a batch. Model sharing arises when $m_i = m_j$: tasks $t_i$ and $t_j$ can share loaded model weights, avoiding redundant loading; this is the primary relationship exploited in this work. Prefix sharing arises when $\text{prefix}(p_i) = \text{prefix}(p_j)$, enabling inference engine cache reuse; vLLM's built-in prefix caching handles this passively, but the scheduler does not reorder tasks to maximise the cache hit rate (see Chapter~\ref{ch:future}).
 
 The optimisation objective is to minimise the makespan $C_{\max}$, the time at which the last task completes:
 $$\text{Minimise } C_{max} = \max_{i \in \{1,...,n\}} \text{completion\_time}(t_i)$$
@@ -1136,7 +1136,7 @@ The ServerlessLLM framework provides the API gateway, router, SQLite database, s
 
 Experiment~1 demonstrates that any model-aware strategy dramatically outperforms FIFO (164.7\,s measured versus 45{,}495\,s extrapolated for 501 tasks, a 276$\times$ speedup), justifying the semaphore concurrency approach. The semaphore buffer size (default 10) trades GPU utilisation against memory pressure.
 
-Model grouping and Johnson's Rule ordering are independent: grouping provides the dominant benefit (199$\times$ speedup alone), and Johnson's Rule with prefetch adds a further $\sim$70\% protection against the worst-case ordering (32B-first tier) on top. Grouping alone is appropriate when I/O-time estimates are unreliable (e.g., under variable network bandwidth). Operating at the cluster-scheduler level ensures portability across vLLM, SGLang, and TensorRT-LLM without engine modifications, at the cost of not exploiting engine-level optimisations such as cross-group prefix caching.
+Model grouping and Johnson's Rule ordering are independent: grouping provides the dominant benefit (199$\times$ speedup alone), and Johnson's Rule with prefetch adds a further $\sim$70\% protection against the worst-case ordering (32B-first tier) on top. Grouping alone is appropriate when I/O-time estimates are unreliable (e.g., under variable network bandwidth). Operating at the cluster-scheduler level ensures portability across vLLM, SGLang, and TensorRT-LLM without engine modifications, at the cost of not actively exploiting engine-level optimisations such as cross-group prefix cache reuse through scheduler-level task reordering.
 
 \section{Algorithm Limitations}
 
@@ -1174,7 +1174,7 @@ Makespan does not capture per-task latency distribution, resource cost, or fairn
 
 \section{Inference-Level Extensions: Prefix-Aware Ordering and Multi-LoRA}
 
-The current system groups tasks by model but not by prompt prefix. Sorting tasks within each group by prefix hash would maximise inference engine cache reuse (e.g., RadixAttention in SGLang), with efficient prefix detection as the main challenge. The system also treats each LoRA adapter as a separate model; grouping by base model and using multi-LoRA serving in vLLM \citep{sheng2024slora} would give significant speedup for adapter-heavy workloads, since adapter swaps take $<$1s versus 80--120s for a full reload.
+The current system groups tasks by model but does not reorder tasks within a group by prompt prefix. vLLM's built-in prefix caching already provides passive cache hits when prompts happen to share a prefix; actively sorting tasks within each group by prefix hash would maximise this reuse (e.g., RadixAttention in SGLang), with efficient prefix detection as the main challenge. The system also treats each LoRA adapter as a separate model; grouping by base model and using multi-LoRA serving in vLLM \citep{sheng2024slora} would give significant speedup for adapter-heavy workloads, since adapter swaps take $<$1s versus 80--120s for a full reload.
 
 \section{Storage Extensions: Adaptive and Network-Aware Prefetching}
 
