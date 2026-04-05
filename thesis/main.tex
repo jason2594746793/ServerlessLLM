@@ -102,7 +102,7 @@ Large Language Model (LLM) batch workloads, including model benchmarking, datase
 
 \section{Motivation}
 
-Consider a model benchmarking scenario: evaluating two LLMs on 10 questions each, totalling 20 tasks. A naive scheduler executes tasks in submission order (ABABAB\ldots), repeatedly loading and evicting model weights. Each model switch takes roughly 100 seconds while each inference requires under a second, so the system spends over 96\% of its time on I/O. Grouping tasks by model (AAAA\ldots BBBB) reduces switches from 10 to~1, cutting execution time by 87\% (Figure~\ref{fig:fifo_vs_grouped}).
+Consider a model benchmarking scenario: evaluating two LLMs on 10 questions each, totalling 20 tasks. A naive scheduler executes tasks in submission order (ABABAABB\ldots), repeatedly loading and evicting model weights. Each model switch takes roughly 100 seconds while each inference requires under a second, so the system spends over 96\% of its time on I/O. Grouping tasks by model (AAAA\ldots BBBB) reduces switches from 10 to~1, cutting execution time by 87\% (Figure~\ref{fig:fifo_vs_grouped}).
 
 Reducing model switches from $O(n)$ to $O(k)$ through grouping provides an order-of-magnitude improvement, but does not eliminate the remaining $O(k)$ model transitions. Checkpoint prefetching hides this residual latency by loading the next model's weights into CPU pinned memory while the current group executes on GPU, exploiting the independence of I/O and GPU computation.
 
@@ -154,9 +154,17 @@ Three research questions are addressed. RQ1: how can shared structure (shared mo
 
 \section{Contributions}
 
-Five contributions are made. First, the batch scheduling problem is formulated as a two-machine flow-shop in which Machine~A represents I/O (loading model weights) and Machine~B represents GPU computation, enabling Johnson's Rule for provably optimal model group ordering. Second, a shared-aware scheduling algorithm discovers model-sharing relationships within a batch, groups tasks by model to reduce switches from $O(n)$ to $O(k)$, and orders groups by Johnson's Rule to maximise I/O-computation overlap. Third, a checkpoint prefetching mechanism uses the pinned memory pool of ServerlessLLM to preload the next model's weights while the current group executes, hiding I/O latency through pipelining. Fourth, the prefetch architecture is analysed and evaluated across storage tiers including RAID-0, 10\,GbE NFS, and 100\,GbE NFS, demonstrating that it generalises to network-attached storage. Fifth, an OpenAI-compatible batch REST API is extended for multi-model batches, enabling clients to submit heterogeneous task lists in a single request and receive results asynchronously.
+Five contributions are made:
 
-The project contributed approximately 3,500 lines of new Python code to the existing ServerlessLLM framework ($\sim$15K LoC).
+\begin{itemize}
+  \item \textbf{Two-machine flow-shop formulation.} The batch scheduling problem is formalised with Machine~A as I/O (loading model weights) and Machine~B as GPU computation, enabling Johnson's Rule for provably optimal model group ordering.
+  \item \textbf{Shared-aware scheduling algorithm.} A scheduler discovers model-sharing relationships within a batch, groups tasks by model to reduce switches from $O(n)$ to $O(k)$, and orders groups by Johnson's Rule to maximise I/O-computation overlap.
+  \item \textbf{Checkpoint prefetching mechanism.} Using the pinned memory pool of ServerlessLLM, the next model's weights are preloaded while the current group executes on GPU, hiding I/O latency through pipelining.
+  \item \textbf{Storage tier analysis and evaluation.} The prefetch architecture is analysed and evaluated across storage tiers including RAID-0, 10\,GbE NFS, and 100\,GbE NFS, demonstrating that it generalises to network-attached storage.
+  \item \textbf{OpenAI-compatible batch API.} A multi-model batch REST API enables clients to submit heterogeneous task lists in a single request and receive results asynchronously, following the OpenAI Batch API specification.
+\end{itemize}
+
+The project contributed approximately 3,500 lines of new Python code to the existing ServerlessLLM framework ($\sim$15K LoC). Evaluation shows the shared-aware strategy achieves a 276$\times$ speedup over FIFO for a 501-task batch (164.7\,s versus an extrapolated 45,495\,s), with speedup growing as batch size increases.
 
 \section{Scope and Boundaries}
 
