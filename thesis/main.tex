@@ -193,7 +193,7 @@ vLLM \citep{kwon2023efficient} introduced continuous batching (iteration-level s
 \section{KV Cache and Prefix Caching}
 \label{sec:bg_kv_cache}
 
-Inference engines cache key-value tensors to avoid redundant computation. vLLM manages the KV cache in fixed-size blocks via PagedAttention \citep{kwon2023efficient}, eliminating fragmentation. When requests share a prompt prefix, KV blocks can be computed once and reused \citep{zheng2024sglang}, though interleaving different prefixes causes eviction. This prefix-level optimisation is complementary to model grouping but is not exploited here (see Chapter~\ref{ch:future}).
+Inference engines cache key-value tensors to avoid redundant computation. vLLM manages the KV cache in fixed-size blocks via PagedAttention \citep{kwon2023efficient}, eliminating fragmentation. When requests share a prompt prefix, KV blocks can be computed once and reused \citep{zheng2024sglang}, though interleaving different prefixes causes eviction. Prefix caching is enabled by default in vLLM, so tasks within a group already benefit from cache hits whenever their prompts share a common prefix. What the scheduler does not currently do is \emph{reorder tasks within a group} to maximise the cache hit rate; tasks are dispatched in submission order, which may cause evictions when different prefixes interleave. Prefix-aware intra-group ordering is identified as future work (Chapter~\ref{ch:future}).
 
 \section{GPU Memory Hierarchy and Pinned Memory}
 \label{sec:bg_pinned_memory}
