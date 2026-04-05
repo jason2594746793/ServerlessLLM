@@ -150,7 +150,13 @@ Together, these three components form a complete pipeline: grouping reduces swit
 
 \section{Research Questions}
 
-Three research questions are addressed. RQ1: how can shared structure (shared models) in a batch be discovered and exploited to reduce makespan, and how does model grouping compare to naive FIFO scheduling? RQ2: can the batch scheduling problem be modelled as a two-machine flow-shop of I/O and compute stages, and does Johnson's Rule provide an effective group ordering to maximise I/O-computation overlap via checkpoint prefetching? RQ3: how do FIFO, model grouping, and shared-aware scheduling compare across varying batch sizes, model sizes, and storage tiers (local SSD, RAID, network storage)?
+Three research questions are addressed:
+
+\begin{itemize}
+  \item[\textbf{RQ1}] How can shared structure (shared model weights) in a batch be discovered and exploited to reduce makespan, and how does model grouping compare to naive FIFO scheduling?
+  \item[\textbf{RQ2}] Can the batch scheduling problem be modelled as a two-machine flow-shop of I/O and compute stages, and does Johnson's Rule provide an effective group ordering to maximise I/O-computation overlap via checkpoint prefetching?
+  \item[\textbf{RQ3}] How do FIFO, model grouping, and shared-aware scheduling compare across varying batch sizes, model sizes, and storage tiers (local SSD, RAID, network storage)?
+\end{itemize}
 
 \section{Contributions}
 
