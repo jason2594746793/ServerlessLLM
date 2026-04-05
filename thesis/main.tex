@@ -201,7 +201,7 @@ Inference engines cache key-value tensors to avoid redundant computation. vLLM m
 Loading model weights involves up to three sequential stages:
 
 \begin{enumerate}
-  \item \textbf{Remote storage $\to$ Local SSD} (optional): When models are not locally cached, checkpoint files are downloaded from object stores (S3, GCS) or network filesystems (NFS). Bandwidth: 1--12\,GB/s depending on network tier (see Section~\ref{sec:bg_storage_hierarchy}).
+  \item \textbf{Remote storage $\to$ Local SSD} (optional): When models are not locally cached, checkpoint files are downloaded from object stores (S3, GCS) or network filesystems (NFS). Bandwidth varies significantly by storage tier and is discussed in Section~\ref{sec:bg_storage_hierarchy}.
   \item \textbf{Local SSD $\to$ CPU RAM}: Checkpoint files are read via filesystem I/O into host memory. Bandwidth: 2--5\,GB/s on NVMe SSD.
   \item \textbf{CPU RAM $\to$ GPU VRAM}: Weights are transferred via PCIe DMA. Bandwidth: 16--32\,GB/s on PCIe Gen4 x16. This step is faster with \emph{pinned} (page-locked) memory allocated via \texttt{cudaHostAlloc} or \texttt{cudaHostRegister} \citep{cuda_guide2024}, which enables direct DMA without intermediate copies.
 \end{enumerate}
