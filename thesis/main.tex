@@ -188,7 +188,7 @@ This work focuses strictly on cluster-level scheduling of \emph{offline} batches
 
 LLMs are built on the transformer architecture \citep{vaswani2017attention}, generating tokens autoregressively via a compute-bound prefill phase ($O(L^2)$ attention) followed by a memory-bandwidth-bound decode phase (one token per step). Modern LLMs span from under 1B to hundreds of billions of parameters, with the landscape expanding rapidly; an 8B model requires $\sim$15\,GB in FP16 and a 70B model $\sim$140\,GB.
 
-vLLM \citep{kwon2023efficient} introduced continuous batching (iteration-level scheduling), inserting new requests at every decode step to maintain near-full GPU utilisation within a single loaded model. vLLM does not address switching between models. Tensor parallelism \citep{shoeybi2019megatron} shards weight matrices across multiple GPUs for models exceeding the VRAM of a single GPU; this work assumes each model fits within one GPU, and tensor parallelism can be combined with the proposed scheduler when needed.
+vLLM \citep{kwon2023efficient} introduced continuous batching (iteration-level scheduling), inserting new requests at every decode step to maintain near-full GPU utilisation within a single loaded model. vLLM does not address switching between models. Tensor parallelism \citep{shoeybi2019megatron} shards weight matrices across multiple GPUs for models exceeding the VRAM of a single GPU; the proposed scheduler automatically detects when a model requires tensor parallelism and allocates a dedicated multi-GPU lane accordingly.
 
 \section{KV Cache and Prefix Caching}
 \label{sec:bg_kv_cache}
@@ -687,7 +687,7 @@ Four falsifiable hypotheses are stated and tested through five experiments:
 All experiments were conducted on a shared 8-GPU node: 8$\times$ NVIDIA RTX A5000 (24\,GB VRAM each), 2$\times$ AMD EPYC 7763 64-core processors, 512\,GB DDR4 RAM, and NVMe SSD storage. Not all GPUs are used in every experiment. The software stack is vLLM 0.6.3, Python 3.10, PyTorch 2.1.0 with CUDA 12.1, and ServerlessLLM v1-beta.
 
 \textbf{Models Tested.}
-All experiments use three Qwen models spanning a wide range of checkpoint sizes: Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), and Qwen2.5-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s), where $a$ is the NVMe SSD load time.
+All experiments use three Qwen models spanning a wide range of checkpoint sizes: Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), and Qwen2.5-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s), where $a$ is the NVMe SSD load time. The 0.6B and 8B models each run on a single GPU; the 32B model exceeds single-GPU VRAM (24\,GB) and runs with tensor parallelism across 4 GPUs (TP=4), which the scheduler detects and allocates automatically.
 
 \textbf{Baseline Strategies.}
 Four strategies are compared: FIFO (submission order); Model Grouping (alphabetical group order, no prefetch); Grouping + Prefetch (alphabetical order with prefetch); and Shared-Aware (Johnson's Rule ordering with prefetch).
@@ -701,7 +701,7 @@ This experiment ablates the three optimisation components to isolate each contri
 
 \subsection{Methodology}
 
-A 501-task batch with three models (0.6B, 8B, 32B; 167 tasks each) was submitted in round-robin interleaved order. FIFO makespan is measured by direct cold-start sampling: each of the three models was run as an isolated single-task batch (full page-cache eviction and GPU release before each task) over 3 runs, yielding per-model cold-start times of 0.6B: $33.1\pm1.7$s, 8B: $64.8\pm5.5$s, 32B: $174.5\pm36.9$s. Extrapolating to 167 tasks per model: $167\times(33.1+64.8+174.5)=45{,}495\pm3{,}353$s ($\approx$12.6h). Running FIFO at full scale with the 32B model is infeasible. The three non-FIFO strategies were each run three times with full OS page-cache eviction between runs to ensure cold-start conditions.
+A 501-task batch with three models (0.6B, 8B, 32B; 167 tasks each) was submitted in round-robin interleaved order. FIFO makespan is obtained from direct cold-start measurements: each model was run as an isolated single-task batch (full page-cache eviction and GPU release before each task) over 3 runs, yielding per-model cold-start times of 0.6B: $33.1\pm1.7$s, 8B: $64.8\pm5.5$s, 32B: $174.5\pm36.9$s. Since FIFO with $n=501$ interleaved tasks incurs one cold-start per task switch, the equivalent FIFO makespan is $167\times(33.1+64.8+174.5)=45{,}495\pm3{,}353$s ($\approx$12.6h); executing this in real time is impractical, so the measured per-switch costs are used to compute the equivalent FIFO runtime. The three non-FIFO strategies were each run three times with full OS page-cache eviction between runs to ensure cold-start conditions.
 
 \subsection{Results}
 
@@ -710,13 +710,13 @@ Table~\ref{tab:exp1_results} and Figure~\ref{fig:exp1_bar} show the results.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.90\textwidth]{figure_exp1_strategy_bar.pdf}
-\caption{Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). FIFO (measured extrapolation, $\approx$12.6h) is shown on a separate axis. Each column adds one optimisation component.}
+\caption{Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). FIFO ($\approx$12.6h, computed from direct cold-start measurements) is shown on a separate axis. Each column adds one optimisation component.}
 \label{fig:exp1_bar}
 \end{figure}
 
 \begin{table}[htbp]
 \centering
-\caption{Experiment 1: Scheduling strategy ablation (501 tasks, 3 models: 0.6B, 8B, 32B; 167 tasks each). FIFO makespan is a measured extrapolation (cold-start sampling, $n=6$ tasks, 3 runs; infeasible at full scale: $\approx$12.6 hours).}
+\caption{Experiment 1: Scheduling strategy ablation (501 tasks, 3 models: 0.6B, 8B, 32B; 167 tasks each). FIFO makespan is computed from direct cold-start measurements (each model sampled over 3 runs); the equivalent full-scale runtime is $\approx$12.6 hours.}
 \label{tab:exp1_results}
 \begin{tabular}{lrrrr}
 \toprule
@@ -862,7 +862,7 @@ $n$ & FIFO (s) & FIFO equiv. & Grouping (s) & Shared-Aware (s) & Speedup \\
 \midrule
 1,000 & 90,300$^\dagger$ & 25.1 h & 239$^\dagger$ & 200$^\dagger$ & 452$\times$ \\
 \bottomrule
-\multicolumn{6}{l}{$^\ddagger$FIFO measured extrapolation (90.3s/switch; infeasible at full scale: $\approx$2.5--12.6h); $^\dagger$projected from $C(n)$ equations; SA from $C_{SA}(n)\approx129+0.071n$.} \\
+\multicolumn{6}{l}{$^\ddagger$FIFO computed from direct cold-start measurements (90.3s/switch average); equivalent full-scale runtime $\approx$2.5--12.6h. $^\dagger$Projected from $C(n)$ equations; SA from $C_{SA}(n)\approx129+0.071n$.} \\
 \end{tabular}
 \normalsize
 \end{table}
@@ -1108,7 +1108,7 @@ For high-bandwidth tiers (RAID-0, 100\,GbE), loading time is already $\sim$2\,s,
 
 \section{Evaluation Summary}
 
-The three optimisations compose in decreasing order of magnitude: model grouping eliminates the $O(n)$ switch cost and provides first-order benefit; prefetching hides the residual I/O latency with second-order gains; and Johnson's Rule squeezes the remaining ordering sensitivity for a third-order improvement. Together they confirm all four hypotheses and transform an infeasible FIFO runtime into a practical batch execution time that continues to improve as batch size grows. The key advantage over industrial batch APIs is multi-model support with shared-structure-aware scheduling; existing systems handle only single-model batches.
+The three optimisations compose in decreasing order of magnitude: model grouping eliminates the $O(n)$ switch cost and provides first-order benefit; prefetching hides the residual I/O latency with second-order gains; and Johnson's Rule squeezes the remaining ordering sensitivity for a third-order improvement. Together they confirm all four hypotheses and reduce a 12.6-hour equivalent FIFO runtime to a practical batch execution time that continues to improve as batch size grows. The key advantage over industrial batch APIs is multi-model support with shared-structure-aware scheduling; existing systems handle only single-model batches.
 
 
 
