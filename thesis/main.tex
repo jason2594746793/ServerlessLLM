@@ -207,9 +207,16 @@ Serverless functions suffer from cold starts: the latency of initialising a new 
 \section{ServerlessLLM Architecture}
 \label{sec:bg_serverlessllm}
 
-ServerlessLLM \citep{fu2024serverlessllm} is an open-source serverless LLM inference framework designed for low-latency model loading. Its four components are: a head node, which receives requests via an API gateway, maintains deployment state in SQLite, and dispatches tasks via a Router; worker nodes (Pylets), GPU machines each running vLLM for inference with a Pylet process managing instance lifecycle; sllm-store, a C++ storage daemon per worker that manages a pinned memory pool and provides gRPC endpoints for model loading (\texttt{LoadModelAsync}, \texttt{RegisterModel}) with multi-threaded I/O to saturate SSD bandwidth \citep{grpc2024}; and an AutoScaler, which reactively adjusts the vLLM instance count based on queue depth.
+ServerlessLLM \citep{fu2024serverlessllm} is an open-source serverless LLM inference framework designed for low-latency model loading. Its architecture consists of four components:
 
-The existing scheduler targets online serving via round-robin assignment, with two limitations for batch workloads: tasks are assigned without considering shared models, causing excessive switching, and scaling is reactive rather than proactive, causing cold starts at batch submission time.
+\begin{itemize}
+  \item \textbf{Head Node:} Receives inference requests via an API gateway, maintains deployment state in a SQLite database, and dispatches tasks to workers via a Router.
+  \item \textbf{Workers (Pylets):} GPU nodes managed by the Pylet process manager. Each worker runs vLLM \citep{kwon2023efficient} instances for inference; Pylet handles instance lifecycle (start, stop, health checks) and reports resource availability.
+  \item \textbf{sllm-store:} A C++ storage daemon running on each worker that manages a pinned memory pool and provides gRPC endpoints for model loading \citep{grpc2024}. Key operations include \texttt{LoadModelAsync} (load weights into pinned CPU memory) and \texttt{RegisterModel} (register a model path). sllm-store uses multi-threaded I/O to saturate SSD bandwidth during loading.
+  \item \textbf{AutoScaler:} Monitors deployment state and adjusts the number of vLLM instances based on demand. The default policy is reactive: scale up when queue depth exceeds a threshold, scale down after an idle timeout.
+\end{itemize}
+
+The existing scheduler is designed for online serving, assigning incoming requests to available workers via round-robin. For batch workloads this has two limitations: (1)~tasks are assigned independently without considering shared models, causing excessive model switching; and (2)~scaling is reactive rather than proactive, causing unnecessary cold starts at the beginning of a batch.
 
 \section{Storage Hierarchy and Network-Attached Model Repositories}
 \label{sec:bg_storage_hierarchy}
