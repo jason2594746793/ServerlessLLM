@@ -206,84 +206,97 @@ def figure_exp3_orderings():
 
 def figure_exp4a_scalability():
     """Dual Y-axis line plot: FIFO, Grouping, Shared-Aware + Speedup.
-    Two measured points (n=99, n=501) plus one projected point (n=1000).
-    Data from Table 4.3 (thesis).
+    Calibrated model lines (solid = measured range n≤501, dashed = projected)
+    with measured anchor points overlaid as markers.
+    Equations from Table 4.3:
+      C_FIFO(n) ≈ 90.3n
+      C_G(n)    ≈ 218 + 0.021n
+      C_SA(n)   ≈ 129 + 0.071n
+    Projection capped at n=1000 to stay within reasonable extrapolation range.
     """
     # Measured anchor points
     measured_n     = [99,    501   ]
     fifo_meas      = [8920,  45495 ]
-    fifo_meas_std  = [None,  3353  ]   # n=99 std not separately reported
     group_meas     = [220.1, 228.5 ]
     group_meas_std = [5.9,   14.2  ]
     sa_meas        = [136.3, 164.7 ]
     sa_meas_std    = [5.8,   8.5   ]
     speedups_meas  = [65,    276   ]
 
-    # Projected point (n=1000, from calibrated C(n) equations)
-    proj_n    = [1000]
-    fifo_proj = [90300]
-    group_proj = [239]
-    sa_proj   = [200]
-    speedup_proj = [452]
+    # Calibrated model lines
+    n_fit  = np.linspace(10,  501,  200)   # solid — measured range
+    n_proj = np.linspace(501, 1000, 100)   # dashed — projection
+
+    def c_fifo(n):  return 90.3 * n
+    def c_g(n):     return 218 + 0.021 * n
+    def c_sa(n):    return 129 + 0.071 * n
+    def speedup(n): return c_fifo(n) / c_sa(n)
 
     fig, ax1 = plt.subplots(figsize=(8, 4.5))
     ax1.set_yscale('log')
-    ax1.set_xscale('log')
-    ax1.set_ylabel('Makespan (s, log scale)')
     ax1.set_xlabel('Batch Size (tasks)')
-
-    all_n = measured_n + proj_n
+    ax1.set_ylabel('Makespan (s, log scale)')
 
     # ── FIFO ──
-    ax1.errorbar(measured_n, fifo_meas,
-                 yerr=[0, 3353], fmt='^-',
-                 color=MAGENTA, linewidth=1.8, markersize=7, capsize=4,
-                 label='FIFO (extrapolated)', zorder=3)
-    ax1.plot(proj_n, fifo_proj, '^--', color=MAGENTA,
-             markersize=7, linewidth=1.2, alpha=0.5)
+    ax1.plot(n_fit,  c_fifo(n_fit),  '-',  color=MAGENTA, linewidth=1.6,
+             label='FIFO (extrapolated)')
+    ax1.plot(n_proj, c_fifo(n_proj), '--', color=MAGENTA, linewidth=1.2, alpha=0.6)
+    ax1.errorbar(measured_n, fifo_meas, yerr=[0, 3353], fmt='^',
+                 color=MAGENTA, markersize=8, capsize=4, zorder=5,
+                 markeredgecolor='black', markeredgewidth=0.5)
 
     # ── Model Grouping ──
-    ax1.errorbar(measured_n, group_meas, yerr=group_meas_std, fmt='s-',
-                 color=ORANGE, linewidth=1.8, markersize=6, capsize=4,
-                 label='Model Grouping', zorder=3)
-    ax1.plot(proj_n, group_proj, 's--', color=ORANGE,
-             markersize=6, linewidth=1.2, alpha=0.5)
+    ax1.plot(n_fit,  c_g(n_fit),  '-',  color=ORANGE, linewidth=1.6,
+             label='Model Grouping')
+    ax1.plot(n_proj, c_g(n_proj), '--', color=ORANGE, linewidth=1.2, alpha=0.6)
+    ax1.errorbar(measured_n, group_meas, yerr=group_meas_std, fmt='s',
+                 color=ORANGE, markersize=7, capsize=4, zorder=5,
+                 markeredgecolor='black', markeredgewidth=0.5)
 
     # ── Shared-Aware ──
-    ax1.errorbar(measured_n, sa_meas, yerr=sa_meas_std, fmt='o-',
-                 color=BLUE, linewidth=1.8, markersize=6, capsize=4,
-                 label='Shared-Aware', zorder=3)
-    ax1.plot(proj_n, sa_proj, 'o--', color=BLUE,
-             markersize=6, linewidth=1.2, alpha=0.5)
+    ax1.plot(n_fit,  c_sa(n_fit),  '-',  color=BLUE, linewidth=1.6,
+             label='Shared-Aware')
+    ax1.plot(n_proj, c_sa(n_proj), '--', color=BLUE, linewidth=1.2, alpha=0.6)
+    ax1.errorbar(measured_n, sa_meas, yerr=sa_meas_std, fmt='o',
+                 color=BLUE, markersize=7, capsize=4, zorder=5,
+                 markeredgecolor='black', markeredgewidth=0.5)
 
-    # Projected label
-    ax1.text(1000, 45000, 'projected →', fontsize=7, color='gray',
-             fontstyle='italic', ha='right')
+    # Projected region shading + label
+    ax1.axvspan(501, 1000, alpha=0.04, color='gray')
+    ax1.text(750, 200, 'projected\n(model)', fontsize=7, color='gray',
+             fontstyle='italic', ha='center', va='bottom')
 
-    ax1.set_xticks([99, 501, 1000])
-    ax1.set_xticklabels(['99', '501', '1,000'])
+    # Vertical lines at measured n
+    for n in measured_n:
+        ax1.axvline(n, color='gray', linestyle=':', linewidth=0.6, alpha=0.4)
+
+    ax1.set_xticks([99, 200, 300, 400, 501, 1000])
+    ax1.set_xticklabels(['99', '200', '300', '400', '501', '1,000'])
+    ax1.set_xlim(50, 1100)
     ax1.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda x, _:
             f'{x/3600:.1f}h' if x >= 3600 else f'{int(x):,}s'))
 
     # 1-hour reference line
     ax1.axhline(3600, color='gray', linestyle=':', linewidth=0.8, alpha=0.5)
-    ax1.text(105, 3600 * 1.15, '1 hour', fontsize=7, color='gray')
+    ax1.text(55, 3600 * 1.15, '1 hour', fontsize=7, color='gray')
 
     ax1.legend(loc='upper left', framealpha=0.9)
 
     # ── Right Y-axis: speedup ──
     ax2 = ax1.twinx()
     ax2.spines['right'].set_visible(True)
-    ax2.semilogx(measured_n, speedups_meas, 'D-', color=GREEN,
-                 linewidth=1.5, markersize=6, label='Speedup (FIFO/SA)')
-    ax2.semilogx(proj_n, speedup_proj, 'D--', color=GREEN,
-                 linewidth=1.2, markersize=6, alpha=0.5)
+    ax2.plot(n_fit,  speedup(n_fit),  '-',  color=GREEN, linewidth=1.5,
+             label='Speedup (FIFO/SA)')
+    ax2.plot(n_proj, speedup(n_proj), '--', color=GREEN, linewidth=1.2, alpha=0.6)
+    ax2.plot(measured_n, speedups_meas, 'D', color=GREEN, markersize=7,
+             zorder=5, markeredgecolor='black', markeredgewidth=0.5)
     ax2.set_ylabel('Speedup (×)', color=GREEN)
     ax2.tick_params(axis='y', labelcolor=GREEN)
 
-    for n, sp in zip(measured_n + proj_n, speedups_meas + speedup_proj):
-        ax2.annotate(f'{sp}×', xy=(n, sp), xytext=(5, 4),
+    for n, sp in zip(measured_n + [1000],
+                     speedups_meas + [int(speedup(1000))]):
+        ax2.annotate(f'{sp}×', xy=(n, sp), xytext=(6, 3),
                      textcoords='offset points', fontsize=8,
                      color=GREEN, fontweight='bold')
 
