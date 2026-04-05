@@ -686,13 +686,13 @@ Four falsifiable hypotheses are stated and tested through five experiments:
 
 All experiments were conducted on a shared 8-GPU node: 8$\times$ NVIDIA RTX A5000 (24\,GB VRAM each), 2$\times$ AMD EPYC 7763 64-core processors, 512\,GB DDR4 RAM, and NVMe SSD storage. Not all GPUs are used in every experiment. The software stack is vLLM 0.6.3, Python 3.10, PyTorch 2.1.0 with CUDA 12.1, and ServerlessLLM v1-beta.
 
-\paragraph{Models Tested}
-Five Qwen models span a 54$\times$ range of checkpoint sizes (1.2--65\,GB): Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-4B ($\sim$8.0\,GB, $a=2.7$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), Qwen2.5-14B ($\sim$28.0\,GB, $a=9.3$\,s), and Qwen2.5-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s). All experiments use the three-model subset (0.6B, 8B, 32B); the 4B and 14B models are characterised here to span the full catalogue size range.
+\textbf{Models Tested.}
+All experiments use three Qwen models spanning a wide range of checkpoint sizes: Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), and Qwen2.5-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s), where $a$ is the NVMe SSD load time.
 
-\paragraph{Baseline Strategies}
+\textbf{Baseline Strategies.}
 Four strategies are compared: FIFO (submission order); Model Grouping (alphabetical group order, no prefetch); Grouping + Prefetch (alphabetical order with prefetch); and Shared-Aware (Johnson's Rule ordering with prefetch).
 
-\paragraph{Metrics}
+\textbf{Metrics.}
 The primary metric is makespan: wall-clock time from submission to last task completion. Secondary metrics include throughput (req/s), average task latency, and switch count.
 
 \section{Experiment 1: Scheduling Strategy Impact on Makespan}
