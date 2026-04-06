@@ -1184,7 +1184,7 @@ The prefetch trigger currently fires at a fixed point; an adaptive policy observ
 
 \section{Production Readiness: Scalability and Engine Abstraction}
 
-Three engineering improvements would enable production-scale deployment: streaming JSONL output to object storage, deadline-aware autoscaling ($\text{workers} = \lceil n \cdot L_{avg} / T_{deadline} \rceil$), and multi-node data parallelism with distributed queues. Abstracting the inference engine interface would add support for SGLang \citep{zheng2024sglang} and TensorRT-LLM \citep{tensorrt_llm2024}. The multi-GPU scheduling algorithm is implemented but not yet experimentally validated across configurations.
+Three engineering improvements would enable production-scale deployment: streaming JSONL output to object storage, deadline-aware autoscaling ($\text{workers} = \lceil n \cdot L_{avg} / T_{deadline} \rceil$), and multi-node data parallelism with distributed queues. Abstracting the inference engine interface would add support for SGLang \citep{zheng2024sglang} and TensorRT-LLM \citep{tensorrt_llm2024}. The multi-GPU scheduling algorithm has been implemented and validated in the experiments reported here, where the 32B model runs with TP=4 across 4 GPUs and is detected and allocated automatically; systematic evaluation of its behaviour across a wider range of GPU counts, TP degrees, and mixed-parallelism configurations remains as future work.
 
 
 % ============================================================================
