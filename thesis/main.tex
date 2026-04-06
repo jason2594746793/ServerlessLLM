@@ -889,7 +889,7 @@ A 90-task batch (30 tasks per model) used Qwen3-0.6B ($a=0.4$s, $b=15$s), Qwen3-
 \small
 \begin{tabular}{lrrrl}
 \toprule
-Ordering & Makespan (s) & Rank & $\Delta$ JR & Tier \\
+Ordering & Makespan (s) & Rank & $\Delta$ JR \\
 \midrule
 \textbf{JR: 0.6B$\to$8B$\to$32B} & \textbf{132.4 $\pm$ 3.5} & \textbf{1/6} & \textbf{---} \\
 0.6B$\to$32B$\to$8B           & 132.9 $\pm$ 4.4 & 2/6 & +0.4\% \\
@@ -1142,7 +1142,7 @@ Model grouping and Johnson's Rule ordering are independent: grouping provides th
 
 \section{Algorithm Limitations}
 
-Four limitations apply. First, the single-model-per-worker assumption is suboptimal for LoRA adapters, which can share base models with sub-second swaps. Second, Johnson's Rule assumes deterministic processing times, but LLM inference times vary with output length; conservative model-size estimates are used instead. Third, the memory-aware prefetch guard skips prefetching when pinned memory is tight rather than evicting cached models. Fourth, the algorithm processes one batch at a time without multi-tenant fairness guarantees. Johnson's Rule delivers maximum benefit when models have strongly contrasting I/O-compute ratios; with a homogeneous catalogue (all similar sizes), any permutation yields nearly identical makespan and the ordering contribution is negligible.
+Four limitations apply. First, the single-model-per-worker assumption is suboptimal for LoRA adapters, which can share base models with sub-second swaps. Second, Johnson's Rule assumes deterministic processing times, but LLM inference times vary with output length; conservative model-size estimates are used instead. Third, when pinned memory is insufficient for a proactive prefetch, the memory-aware guard defers loading to transition time; sllm-store's C++ LRU policy then evicts stale models on demand, so the transition still completes correctly but the prefetch overlap benefit is lost. Fourth, the algorithm processes one batch at a time without multi-tenant fairness guarantees. Johnson's Rule delivers maximum benefit when models have strongly contrasting I/O-compute ratios; with a homogeneous catalogue (all similar sizes), any permutation yields nearly identical makespan and the ordering contribution is negligible.
 
 The theoretical makespan lower bound for the two-machine flow-shop is:
 $$C_{\max}^* \geq \max\left(\sum_{i=1}^k b_i,\; \min_i a_i + \sum_{i=1}^k b_i,\; \sum_{i=1}^k a_i + \min_i b_i\right)$$
