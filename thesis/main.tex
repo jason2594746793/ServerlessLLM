@@ -432,11 +432,8 @@ Figure~\ref{fig:system_arch} illustrates the system architecture.
 \draw[arr, cgreen, dashed] (nfs.north) -- (wn.south);
 
 % ── Contribution legend ──
-\node[draw=black!40, fill=cbluelight, minimum width=0.45cm, minimum height=0.28cm, inner sep=0, anchor=east]
-    (ll_e) at ($(ssd.south) + (-0.6, -0.75)$) {};
-\node[font=\scriptsize, anchor=west] at (ll_e.east) {\;Existing};
-\node[draw=cpurple!70, fill=cpurplelight, minimum width=0.45cm, minimum height=0.28cm, inner sep=0, anchor=west]
-    (ll_x) at ($(ll_e.east) + (1.6, 0)$) {};
+\node[draw=cpurple!70, fill=cpurplelight, minimum width=0.45cm, minimum height=0.28cm, inner sep=0, anchor=east]
+    (ll_x) at ($(ssd.south) + (-0.6, -0.75)$) {};
 \node[font=\scriptsize, anchor=west] at (ll_x.east) {\;Extended (this work)};
 \node[draw=camber!80!black, fill=camber!30, minimum width=0.45cm, minimum height=0.28cm, inner sep=0, anchor=west]
     (ll_n) at ($(ll_x.east) + (2.8, 0)$) {};
