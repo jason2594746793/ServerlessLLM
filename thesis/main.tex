@@ -627,7 +627,7 @@ The overall scheduling pipeline is illustrated in Figure~\ref{fig:scheduling_flo
 
 \subsection{Baseline Strategies}
 
-Four scheduling strategies are compared. FIFO executes tasks in submission order. Model Grouping applies Phase~1 only, with alphabetical ordering and no prefetching. Grouping + Prefetch applies Phases~1 and~3 with alphabetical ordering, serving as an intermediate ablation baseline. Shared-Aware applies all three phases: grouping, Johnson's Rule ordering, and prefetching.
+Four scheduling strategies are compared. FIFO executes tasks in submission order. Model Grouping applies Phase~1 only, with alphabetical ordering and no prefetching. Grouping + Prefetch applies Phase~1 grouping and enables checkpoint prefetching, but uses alphabetical group ordering rather than Johnson's Rule, serving as an intermediate ablation baseline. Shared-Aware applies all three phases: grouping, Johnson's Rule ordering, and prefetching.
 
 \section{Checkpoint Prefetching Mechanism}
 
@@ -682,7 +682,7 @@ Four falsifiable hypotheses are tested across five experiments.
 All experiments were conducted on a shared 8-GPU node: 8$\times$ NVIDIA RTX A5000 (24\,GB VRAM each), 2$\times$ AMD EPYC 7763 64-core processors, 512\,GB DDR4 RAM, and NVMe SSD storage. Not all GPUs are used in every experiment. The software stack is vLLM 0.6.3, Python 3.10, PyTorch 2.1.0 with CUDA 12.1, and ServerlessLLM v1-beta.
 
 \textbf{Models Tested.}
-All experiments use three Qwen models spanning a wide range of checkpoint sizes: Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), and Qwen3-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s), where $a$ is the NVMe SSD load time. The 0.6B and 8B models each run on a single GPU; the 32B model exceeds single-GPU VRAM (24\,GB) and runs with tensor parallelism across 4 GPUs (TP=4), which the scheduler detects and allocates automatically.
+All experiments use three Qwen models spanning a wide range of checkpoint sizes: Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), and Qwen3-32B ($\sim$65\,GB, $a=21.7$\,s), where $a$ is the NVMe SSD load time. The 0.6B and 8B models each run on a single GPU; the 32B model exceeds single-GPU VRAM (24\,GB) and runs with tensor parallelism across 4 GPUs (TP=4), which the scheduler detects and allocates automatically.
 
 \textbf{Baseline Strategies.}
 Four strategies are compared: FIFO (submission order); Model Grouping (alphabetical group order, no prefetch); Grouping + Prefetch (alphabetical order with prefetch); and Shared-Aware (Johnson's Rule ordering with prefetch).
@@ -874,7 +874,7 @@ Model Grouping without prefetching has a nearly flat scaling ($C_G(n) \approx 21
 
 \section{Experiment 4: Johnson's Rule Ordering Ablation}
 
-Experiment~1 shows a 21\% improvement from Grouping+Prefetch to Shared-Aware, but does not isolate the ordering contribution. This experiment exhaustively evaluates all $3!=6$ permutations of the three model groups, each repeated three times (18 total runs), to quantify the full impact of group ordering and confirm that Johnson's Rule reliably selects from the optimal tier.
+Experiment~1 shows a 20\% improvement from Grouping+Prefetch to Shared-Aware, but does not isolate the ordering contribution. This experiment exhaustively evaluates all $3!=6$ permutations of the three model groups, each repeated three times (18 total runs), to quantify the full impact of group ordering and confirm that Johnson's Rule reliably selects from the optimal tier.
 
 \subsection{Methodology}
 
@@ -1155,7 +1155,7 @@ Experiments were conducted on a shared cluster; other users' processes and I/O c
 
 Prefetching and Johnson's Rule require diverse checkpoint sizes to produce meaningful variation; with similarly-sized models on fast SSD, I/O costs are small relative to compute and ordering has limited effect. Experiment~3 demonstrates scaling from 99 to 501 tasks with speedup growing from 65$\times$ to 276$\times$; larger-scale projections are indicative due to two-point calibration.
 
-The FIFO extrapolation relies on cold-start sampling with explicit GPU release between tasks (6 tasks, 3 runs). The 32B cold-start showed substantial run-to-run variance (CV\,$\approx$\,21\%), likely due to non-deterministic TP=4 vLLM initialisation (NCCL setup, GPU memory allocation); the propagated $\pm$3{,}353\,s uncertainty is reported in Table~\ref{tab:exp1_results}. The extrapolation is cross-validated against the independently measured 115.2\,s transition gap (8B$\to$32B) from Experiment~2, confirming that 32B cold-load overhead dominates the per-switch cost. The explicit GPU-release protocol between tasks may slightly understate the true FIFO switch cost (omitting model unload time, typically 3--6\,s per transition), making the reported extrapolation a conservative lower bound.
+The FIFO extrapolation relies on cold-start sampling with explicit GPU release between tasks. The 32B cold-start showed substantial run-to-run variance (CV\,$\approx$\,21\%), likely due to non-deterministic TP=4 vLLM initialisation (NCCL setup, GPU memory allocation); the propagated $\pm$3{,}353\,s uncertainty is reported in Table~\ref{tab:exp1_results}. The extrapolation is cross-validated against the independently measured 115.2\,s transition gap (8B$\to$32B) from Experiment~2, confirming that 32B cold-load overhead dominates the per-switch cost. The explicit GPU-release protocol between tasks may slightly understate the true FIFO switch cost (omitting model unload time, typically 3--6\,s per transition), making the reported extrapolation a conservative lower bound.
 
 \textbf{External Validity}
 Results cover three Qwen models on one hardware configuration (RTX A5000, NVMe SSD) and may not generalise to mixture-of-experts architectures, other storage technologies (Lustre, CephFS), or larger clusters. Johnson's Rule optimality holds for any $k$ by theory; the experimental evaluation covers $k=3$ model groups, and generalisation to $k>3$ is left for future work. Faster storage would reduce the absolute benefit of grouping, though the relative advantage remains consistent.
