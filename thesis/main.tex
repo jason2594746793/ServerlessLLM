@@ -891,12 +891,12 @@ A 90-task batch (30 tasks per model) used Qwen3-0.6B ($a=0.4$s, $b=15$s), Qwen3-
 \toprule
 Ordering & Makespan (s) & Rank & $\Delta$ JR & Tier \\
 \midrule
-\textbf{JR: 0.6B$\to$8B$\to$32B} & \textbf{132.4 $\pm$ 3.5} & \textbf{1/6} & \textbf{---} & 0.6B-first \\
-0.6B$\to$32B$\to$8B           & 132.9 $\pm$ 4.4 & 2/6 & +0.4\% & 0.6B-first \\
-8B$\to$32B$\to$0.6B           & 173.0 $\pm$ 2.8 & 3/6 & +30.7\% & 8B-first \\
-8B$\to$0.6B$\to$32B           & 175.7 $\pm$ 8.1 & 4/6 & +32.7\% & 8B-first \\
-32B$\to$8B$\to$0.6B           & 223.1 $\pm$ 8.7 & 5/6 & +68.5\% & 32B-first \\
-32B$\to$0.6B$\to$8B           & 227.8 $\pm$ 5.1 & 6/6 & +72.1\% & 32B-first \\
+\textbf{JR: 0.6B$\to$8B$\to$32B} & \textbf{132.4 $\pm$ 3.5} & \textbf{1/6} & \textbf{---} \\
+0.6B$\to$32B$\to$8B           & 132.9 $\pm$ 4.4 & 2/6 & +0.4\% \\
+8B$\to$32B$\to$0.6B           & 173.0 $\pm$ 2.8 & 3/6 & +30.7\%  \\
+8B$\to$0.6B$\to$32B           & 175.7 $\pm$ 8.1 & 4/6 & +32.7\%  \\
+32B$\to$8B$\to$0.6B           & 223.1 $\pm$ 8.7 & 5/6 & +68.5\% \\
+32B$\to$0.6B$\to$8B           & 227.8 $\pm$ 5.1 & 6/6 & +72.1\% \\
 \bottomrule
 \end{tabular}
 \normalsize
@@ -1017,25 +1017,27 @@ At $n=30$, the two 0.6B-first orderings tied because the compute window of the f
 
 This raises a natural question: does the secondary ordering become meaningful when task count is reduced and the compute window shrinks? At $n=5$ tasks per model, each group runs for only $\approx$2--3s of compute, shorter than the SSD load times of the 8B ($a=5.1$s) and 32B ($a=21.7$s) models. These two groups therefore become \emph{I/O-dominant}: loading takes longer than executing them. Johnson's Rule handles this by switching to its S2 rule (placing I/O-dominant groups last, sorted by compute time descending), which prescribes 0.6B$\to$32B$\to$8B for this regime.
 
-Table~\ref{tab:exp4_sensitivity} shows the results across $n=5$, 15, and 30. At $n=5$, the JR ordering (0.6B$\to$32B$\to$8B) achieves rank~2/6, 4.7s behind the empirical fastest; this gap is in the predicted direction but does not reach statistical significance ($t\approx2.2$, $p>0.05$ with 4\,d.f.). At $n=15$, the gap between the two 0.6B-first orderings widens to 7.3s, consistent with a gradual transition. By $n=30$, all groups become compute-dominant again and the gap collapses to 0.5s.
+Table~\ref{tab:exp4_sensitivity} shows the results across $n=5$, 15, and 30. At $n=5$, the JR ordering (0.6B$\to$32B$\to$8B) achieves rank~2/6, 4.7s behind the empirical fastest; this gap is in the predicted direction but does not reach statistical significance ($t\approx2.2$, $p>0.05$ with 4 degrees of freedom). At $n=15$, the gap between the two 0.6B-first orderings widens to 7.3s, consistent with a gradual transition. By $n=30$, all groups become compute-dominant again and the gap collapses to 0.5s.
 
 \begin{table}[htbp]
 \centering
-\caption{Task-count sensitivity: makespan (mean\,$\pm$\,std, seconds) across three batch sizes. Bold: JR-predicted optimal for that regime.}
+\caption{Task-count sensitivity: makespan (mean\,$\pm$\,std, seconds) for all six group orderings at three batch sizes. Johnson's Rule selects a different optimal ordering depending on task count: at $n=5$, the 8B and 32B groups are I/O-dominant (load time exceeds compute time), so JR places them later; at $n\geq15$, all groups are compute-dominant and JR sorts by ascending load time instead. The JR-selected ordering for each column is shown in bold.}
 \label{tab:exp4_sensitivity}
 \begin{tabular}{lccc}
 \toprule
 Ordering & $n=5$/model & $n=15$/model & $n=30$/model \\
 \midrule
-0.6B$\to$8B$\to$32B $\dagger$ & 131.1$\pm$2.2 & 137.9$\pm$5.8 & \textbf{132.4$\pm$3.5} \\
-\textbf{0.6B$\to$32B$\to$8B} $\ddagger$ & \textbf{135.8$\pm$3.0} & 145.2$\pm$11.6 & 132.9$\pm$4.4 \\
+\textit{JR predicts:} & \textit{0.6B$\to$32B$\to$8B} & \textit{0.6B$\to$8B$\to$32B} & \textit{0.6B$\to$8B$\to$32B} \\
+\midrule
+0.6B$\to$8B$\to$32B & 131.1$\pm$2.2 & 137.9$\pm$5.8 & \textbf{132.4$\pm$3.5} \\
+\textbf{0.6B$\to$32B$\to$8B} & \textbf{135.8$\pm$3.0} & 145.2$\pm$11.6 & 132.9$\pm$4.4 \\
 8B$\to$32B$\to$0.6B & 192.7$\pm$14.1 & --- & 173.0$\pm$2.8 \\
 8B$\to$0.6B$\to$32B & 185.3$\pm$28.1 & --- & 175.7$\pm$8.1 \\
 32B$\to$8B$\to$0.6B & 205.3$\pm$2.3 & --- & 223.1$\pm$8.7 \\
 32B$\to$0.6B$\to$8B & 219.4$\pm$5.8 & --- & 227.8$\pm$5.1 \\
 \bottomrule
+\multicolumn{4}{l}{\footnotesize ``---'': not measured at $n=15$. Bold marks the JR-predicted ordering for that column.}
 \end{tabular}
-\footnotesize{$\dagger$\,JR-optimal at $n\geq15$; $\ddagger$\,JR-optimal at $n=5$ (8B and 32B I/O-dominant). ``---'': not measured at $n=15$.}
 \end{table}
 
 The three-tier structure (0.6B-first $\ll$ 8B-first $\ll$ 32B-first) persists at every task count, confirming that first-position choice dominates makespan regardless of batch size. Johnson's Rule correctly identifies the first-position model at all task counts, and its secondary ranking is directionally correct even when statistical power is limited.
