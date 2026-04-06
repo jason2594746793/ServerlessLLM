@@ -658,7 +658,6 @@ RAID-0 (4$\times$)$^\dagger$ & 12\,GB/s & 1.3\,s & 5.0\,s & 32B+ only \\
 
 For slower storage tiers, Johnson's Rule is more critical: compute-heavy groups must come first to provide sufficient overlap windows. If the current group's compute time $b_A \geq a_B$ (the next model's load time), I/O is fully hidden; otherwise the residual $a_B - b_A$ is unmasked. Full overlap requires at least $\lceil a_i / t \rceil$ tasks in the preceding group, easily met on local SSD but requiring larger groups on 10\,GbE (see Table~\ref{tab:storage_bandwidth}).
 
-The shared-aware scheduling algorithm operates at the cluster scheduler level, applies Johnson's Rule for provably optimal group ordering, and uses checkpoint prefetching with a memory-aware guard to hide model loading latency.
 
 
 % ============================================================================
@@ -683,7 +682,7 @@ Four falsifiable hypotheses are tested across five experiments.
 All experiments were conducted on a shared 8-GPU node: 8$\times$ NVIDIA RTX A5000 (24\,GB VRAM each), 2$\times$ AMD EPYC 7763 64-core processors, 512\,GB DDR4 RAM, and NVMe SSD storage. Not all GPUs are used in every experiment. The software stack is vLLM 0.6.3, Python 3.10, PyTorch 2.1.0 with CUDA 12.1, and ServerlessLLM v1-beta.
 
 \textbf{Models Tested.}
-All experiments use three Qwen models spanning a wide range of checkpoint sizes: Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), and Qwen2.5-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s), where $a$ is the NVMe SSD load time. The 0.6B and 8B models each run on a single GPU; the 32B model exceeds single-GPU VRAM (24\,GB) and runs with tensor parallelism across 4 GPUs (TP=4), which the scheduler detects and allocates automatically.
+All experiments use three Qwen models spanning a wide range of checkpoint sizes: Qwen3-0.6B ($\sim$1.2\,GB, $a=0.4$\,s), Qwen3-8B ($\sim$15.4\,GB, $a=5.1$\,s), and Qwen3-32B-Instruct ($\sim$65\,GB, $a=21.7$\,s), where $a$ is the NVMe SSD load time. The 0.6B and 8B models each run on a single GPU; the 32B model exceeds single-GPU VRAM (24\,GB) and runs with tensor parallelism across 4 GPUs (TP=4), which the scheduler detects and allocates automatically.
 
 \textbf{Baseline Strategies.}
 Four strategies are compared: FIFO (submission order); Model Grouping (alphabetical group order, no prefetch); Grouping + Prefetch (alphabetical order with prefetch); and Shared-Aware (Johnson's Rule ordering with prefetch).
@@ -706,7 +705,7 @@ Table~\ref{tab:exp1_results} and Figure~\ref{fig:exp1_bar} show the results.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.90\textwidth]{figure_exp1_strategy_bar.pdf}
-\caption{Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). FIFO ($\approx$12.6h, computed from direct cold-start measurements) is shown on a separate axis. Each column adds one optimisation component.}
+\caption{Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). Each column adds one optimisation component.}
 \label{fig:exp1_bar}
 \end{figure}
 
@@ -745,14 +744,14 @@ Table~\ref{tab:exp2_results} shows the results and Figure~\ref{fig:prefetch_time
 
 \begin{table}[htbp]
 \centering
-\caption{Experiment 2: Checkpoint prefetching (90 tasks, 3 models: 0.6B, 8B, 32B; 30 each). Avg transition is the mean of the two inter-group gaps.}
+\caption{Experiment 2: Checkpoint prefetching (90 tasks, 3 models: 0.6B, 8B, 32B; 30 each). Per-transition gap is the measured idle time between consecutive groups; latency hidden is computed from the average transition time.}
 \label{tab:exp2_results}
-\begin{tabular}{lrrr}
+\begin{tabular}{lrrrr}
 \toprule
-Configuration & Makespan (s) & Avg Transition (s) & Latency Hidden \\
+Configuration & Makespan (s) & Trans 1: 0.6B$\to$8B (s) & Trans 2: 8B$\to$32B (s) & Latency Hidden \\
 \midrule
-No Prefetch & 221.5 $\pm$ 3.5 & 88.5 & 0\% \\
-With Prefetch & 140.3 $\pm$ 2.4 & 44.4 & 49.9\% \\
+No Prefetch  & 221.5 $\pm$ 3.5 & 61.9 & 115.2 & 0\% \\
+With Prefetch & 140.3 $\pm$ 2.4 & 36.9 & 51.9  & 49.9\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -824,7 +823,7 @@ With Prefetch & 140.3 $\pm$ 2.4 & 44.4 & 49.9\% \\
 
 \subsection{Analysis}
 
-Prefetching reduced makespan by 36.6\% (221.5s to 140.3s), saving 81.2 seconds across two model transitions. The per-transition gaps fell from 61.9s (0.6B$\to$8B) and 115.2s (8B$\to$32B) without prefetch to 36.9s and 51.9s with prefetch, hiding 49.9\% of loading latency. When a group begins execution, the scheduler triggers an asynchronous \texttt{prefetch\_to\_cpu} call via the gRPC \texttt{LoadModelAsync} endpoint; sllm-store loads checkpoint files from SSD into the pinned memory pool using multi-threaded I/O \citep{cuda_guide2024}, running in a background thread while the GPU executes the current group. At transition, weights are already in pinned memory, enabling direct DMA at near-peak PCIe bandwidth ($\sim$25\,GB/s). The residual transition time covers GPU memory allocation and CPU-to-GPU weight transfer, which cannot be overlapped with computation; 36.9s for the 8B model and 51.9s for the 32B model represent irreducible lower bounds.
+Prefetching reduced makespan by 36.7\% (221.5s to 140.3s), saving 81.2 seconds across two model transitions. As shown in Table~\ref{tab:exp2_results}, both per-transition gaps roughly halved: 61.9s$\to$36.9s (0.6B$\to$8B) and 115.2s$\to$51.9s (8B$\to$32B), hiding 49.9\% of loading latency overall. When a group begins execution, the scheduler triggers an asynchronous \texttt{prefetch\_to\_cpu} call via the gRPC \texttt{LoadModelAsync} endpoint; sllm-store loads checkpoint files from SSD into the pinned memory pool using multi-threaded I/O \citep{cuda_guide2024}, running in a background thread while the GPU executes the current group. At transition, weights are already in pinned memory, enabling direct DMA at near-peak PCIe bandwidth ($\sim$25\,GB/s). The residual transition time covers GPU memory allocation and CPU-to-GPU weight transfer, which cannot be overlapped with computation; 36.9s for the 8B model and 51.9s for the 32B model represent irreducible lower bounds.
 
 With 30 tasks per group at $\sim$0.5s each, the compute time of only $\sim$15s (0.6B group) is shorter than the 8B checkpoint load time ($\sim$20s), so the 8B prefetch starts during the 0.6B group but completes at the beginning of the 8B group, resulting in a 36.9s residual gap. In production workloads with longer group compute times, the overlap would be complete and the residual gap would equal only the GPU memory allocation time. H2 is confirmed to within measurement uncertainty: prefetching hides approximately half the model loading latency (49.9\%) even with the short 30-task groups used here, and the benefit grows with longer groups.
 
@@ -833,7 +832,7 @@ With 30 tasks per group at $\sim$0.5s each, the compute time of only $\sim$15s (
 
 \subsection{Scaling with Batch Size}
 
-Batch sizes of n=99 and n=501 were measured with three models (Qwen3-0.6B, Qwen3-8B, Qwen2.5-32B) in equal proportion (n/3 tasks each). A single projected data point at n=1,000 is included for illustration, derived from closed-form scaling equations calibrated at the two measured anchor points. Table~\ref{tab:exp3_scale} and Figure~\ref{fig:exp3_scalability} show the results.
+Batch sizes of n=99 and n=501 were measured with three models (Qwen3-0.6B, Qwen3-8B, Qwen3-32B) in equal proportion (n/3 tasks each). A single projected data point at n=1,000 is included for illustration, derived from closed-form scaling equations calibrated at the two measured anchor points. Table~\ref{tab:exp3_scale} and Figure~\ref{fig:exp3_scalability} show the results.
 
 \begin{figure}[htbp]
 \centering
