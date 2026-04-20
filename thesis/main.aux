@@ -57,14 +57,15 @@
 \citation{hendrycks2020measuring}
 \citation{chen2021evaluating}
 \citation{zheng2023judging}
+\citation{openai_batch_api}
+\citation{aws_bedrock_batch}
 \@writefile{toc}{\contentsline {section}{\numberline {2.6}Storage Hierarchy and Network-Attached Model Repositories}{6}{section.2.6}\protected@file@percent }
 \newlabel{sec:bg_storage_hierarchy}{{2.6}{6}{Storage Hierarchy and Network-Attached Model Repositories}{section.2.6}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {2.7}Makespan Minimisation}{6}{section.2.7}\protected@file@percent }
 \newlabel{sec:bg_makespan}{{2.7}{6}{Makespan Minimisation}{section.2.7}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.7.1}Johnson's Rule for Two-Machine Flow-Shops}{6}{subsection.2.7.1}\protected@file@percent }
 \newlabel{sec:bg_johnsons_rule}{{2.7.1}{6}{Johnson's Rule for Two-Machine Flow-Shops}{subsection.2.7.1}{}}
-\citation{openai_batch_api}
-\citation{aws_bedrock_batch}
+\@writefile{toc}{\contentsline {section}{\numberline {2.8}LLM Batch Workloads}{6}{section.2.8}\protected@file@percent }
 \citation{crankshaw2017clipper}
 \citation{romero2021infaas}
 \citation{gujarati2020serving}
@@ -81,7 +82,6 @@
 \citation{aminabadi2022deepspeed}
 \citation{sheng2023flexgen}
 \citation{mohan2021checkfreq}
-\@writefile{toc}{\contentsline {section}{\numberline {2.8}LLM Batch Workloads}{7}{section.2.8}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {2.9}ML Serving Systems}{7}{section.2.9}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {2.10}Data-Locality and Model-Aware Scheduling}{7}{section.2.10}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {2.11}Prefetching and Pipelining}{7}{section.2.11}\protected@file@percent }
@@ -125,93 +125,87 @@
 \newlabel{sec:worker_allocation}{{3.4.3}{15}{Phase 3: Worker Allocation}{subsection.3.4.3}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {3.3}{\ignorespaces End-to-end scheduling example for a 1006-task batch with 4 models on 6 GPUs. \textbf  {Phase\nobreakspace  {}1} groups tasks by model. \textbf  {Phase\nobreakspace  {}2} applies Johnson's Rule: compute-heavy groups ($a_i \leq b_i$) are scheduled first to maximise prefetch overlap. \textbf  {Phase\nobreakspace  {}3} allocates groups to GPUs: Model\nobreakspace  {}D (70B, TP=2) occupies a dedicated 2-GPU tensor parallelism lane; Models\nobreakspace  {}A (500 tasks) and\nobreakspace  {}C (300 tasks) are each split across 2 single-GPU replicas by LPT rebalancing (the lane imbalance exceeds the full model-switch cost: NVMe read $+$ PCIe DMA $+$ vLLM init $\approx $38\,s); Model\nobreakspace  {}B's smaller task count does not meet this threshold and remains on a single GPU. Per-GPU Johnson's Rule ordering is applied within each lane. Dashed arrows (pf) indicate checkpoint prefetch triggers.\relax }}{16}{figure.caption.7}\protected@file@percent }
 \newlabel{fig:scheduling_flow}{{3.3}{16}{End-to-end scheduling example for a 1006-task batch with 4 models on 6 GPUs. \textbf {Phase~1} groups tasks by model. \textbf {Phase~2} applies Johnson's Rule: compute-heavy groups ($a_i \leq b_i$) are scheduled first to maximise prefetch overlap. \textbf {Phase~3} allocates groups to GPUs: Model~D (70B, TP=2) occupies a dedicated 2-GPU tensor parallelism lane; Models~A (500 tasks) and~C (300 tasks) are each split across 2 single-GPU replicas by LPT rebalancing (the lane imbalance exceeds the full model-switch cost: NVMe read $+$ PCIe DMA $+$ vLLM init $\approx $38\,s); Model~B's smaller task count does not meet this threshold and remains on a single GPU. Per-GPU Johnson's Rule ordering is applied within each lane. Dashed arrows (pf) indicate checkpoint prefetch triggers.\relax }{figure.caption.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.4}Baseline Strategies}{16}{subsection.3.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.4}Baseline Strategies}{17}{subsection.3.4.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {3.5}Checkpoint Prefetching Mechanism}{17}{section.3.5}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.5.1}Prefetching Pipeline}{17}{subsection.3.5.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.5.2}Design Analysis: Prefetching Across Storage Tiers}{17}{subsection.3.5.2}\protected@file@percent }
 \newlabel{sec:prefetch_storage_tiers}{{3.5.2}{17}{Design Analysis: Prefetching Across Storage Tiers}{subsection.3.5.2}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {3.1}{\ignorespaces Storage tier characteristics and scheduling implications. Load times are calculated as $\text  {checkpoint\_size} / \text  {bandwidth}$. The NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates.\relax }}{17}{table.caption.8}\protected@file@percent }
 \newlabel{tab:storage_bandwidth}{{3.1}{17}{Storage tier characteristics and scheduling implications. Load times are calculated as $\text {checkpoint\_size} / \text {bandwidth}$. The NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates.\relax }{table.caption.8}{}}
-\@writefile{toc}{\contentsline {chapter}{\numberline {4}Evaluation}{18}{chapter.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {4}Evaluation}{19}{chapter.4}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {4.1}Experimental Setup}{18}{section.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {4.2}Experiment 1: Scheduling Strategy Impact on Makespan}{19}{section.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.1}Methodology}{19}{subsection.4.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.2}Results}{19}{subsection.4.2.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {4.1}{\ignorespaces Experiment 1: Scheduling strategy ablation (501 tasks, 3 models: 0.6B, 8B, 32B; 167 tasks each). FIFO makespan is a measured extrapolation (cold-start sampling, $n=6$ tasks, 3 runs; infeasible at full scale: $\approx $12.6 hours).\relax }}{19}{table.caption.10}\protected@file@percent }
-\newlabel{tab:exp1_results}{{4.1}{19}{Experiment 1: Scheduling strategy ablation (501 tasks, 3 models: 0.6B, 8B, 32B; 167 tasks each). FIFO makespan is a measured extrapolation (cold-start sampling, $n=6$ tasks, 3 runs; infeasible at full scale: $\approx $12.6 hours).\relax }{table.caption.10}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.3}Analysis}{19}{subsection.4.2.3}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). FIFO (45,495s $\approx $ 12.6h, measured extrapolation) is shown on a separate axis. Each column adds one optimisation component: grouping alone (199$\times $), adding prefetch (220$\times $), adding Johnson's Rule ordering (276$\times $).\relax }}{20}{figure.caption.9}\protected@file@percent }
-\newlabel{fig:exp1_bar}{{4.1}{20}{Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). FIFO (45,495s $\approx $ 12.6h, measured extrapolation) is shown on a separate axis. Each column adds one optimisation component: grouping alone (199$\times $), adding prefetch (220$\times $), adding Johnson's Rule ordering (276$\times $).\relax }{figure.caption.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.1}Experimental Setup}{19}{section.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.2}Experiment 1: Scheduling Strategy Impact on Makespan}{20}{section.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.1}Methodology}{20}{subsection.4.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.2}Results}{20}{subsection.4.2.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.1}{\ignorespaces Experiment 1: Scheduling strategy ablation (501 tasks, 3 models: 0.6B, 8B, 32B; 167 tasks each). FIFO makespan is computed from direct cold-start measurements (each model sampled over 3 runs); the equivalent full-scale runtime is $\approx $12.6 hours.\relax }}{20}{table.caption.10}\protected@file@percent }
+\newlabel{tab:exp1_results}{{4.1}{20}{Experiment 1: Scheduling strategy ablation (501 tasks, 3 models: 0.6B, 8B, 32B; 167 tasks each). FIFO makespan is computed from direct cold-start measurements (each model sampled over 3 runs); the equivalent full-scale runtime is $\approx $12.6 hours.\relax }{table.caption.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.3}Analysis}{20}{subsection.4.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). Each column adds one optimisation component.\relax }}{21}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:exp1_bar}{{4.1}{21}{Incremental scheduling strategy ablation for 501 tasks with 3 models (0.6B, 8B, 32B). Each column adds one optimisation component.\relax }{figure.caption.9}{}}
 \citation{cuda_guide2024}
-\@writefile{toc}{\contentsline {section}{\numberline {4.3}Experiment 2: Checkpoint Prefetching Effectiveness}{21}{section.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.1}Methodology}{21}{subsection.4.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.2}Results}{21}{subsection.4.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.3}Analysis}{21}{subsection.4.3.3}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {4.2}{\ignorespaces Experiment 2: Checkpoint prefetching (90 tasks, 3 models: 0.6B, 8B, 32B; 30 each). Avg transition is the mean of the two inter-group gaps.\relax }}{22}{table.caption.11}\protected@file@percent }
-\newlabel{tab:exp2_results}{{4.2}{22}{Experiment 2: Checkpoint prefetching (90 tasks, 3 models: 0.6B, 8B, 32B; 30 each). Avg transition is the mean of the two inter-group gaps.\relax }{table.caption.11}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4.2}{\ignorespaces Illustrative execution timeline: without prefetch the GPU idles during model loading; with prefetch, loading overlaps with the preceding group's computation, hiding most of the transition cost.\relax }}{22}{figure.caption.12}\protected@file@percent }
-\newlabel{fig:prefetch_timeline}{{4.2}{22}{Illustrative execution timeline: without prefetch the GPU idles during model loading; with prefetch, loading overlaps with the preceding group's computation, hiding most of the transition cost.\relax }{figure.caption.12}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.4}Experiment 3: Scalability and Robustness}{22}{section.4.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.1}Scaling with Batch Size}{22}{subsection.4.4.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {4.3}{\ignorespaces Makespan scalability across batch sizes (99--1,000 tasks, 3 models, log-log axes). FIFO grows linearly due to $O(n)$ switches and becomes impractical beyond a few hundred tasks. Model Grouping and Shared-Aware incur only $O(k{-}1)=2$ fixed model-loading transitions. Speedup grows from 65$\times $ at 99 tasks to 276$\times $ at 501 tasks (both measured), with a projected 452$\times $ at 1,000 tasks. Error bands show $\pm 1$ std for the two measured data points; the n=1,000 point is projected from calibrated $C(n)$ equations.\relax }}{23}{figure.caption.13}\protected@file@percent }
-\newlabel{fig:exp3_scalability}{{4.3}{23}{Makespan scalability across batch sizes (99--1,000 tasks, 3 models, log-log axes). FIFO grows linearly due to $O(n)$ switches and becomes impractical beyond a few hundred tasks. Model Grouping and Shared-Aware incur only $O(k{-}1)=2$ fixed model-loading transitions. Speedup grows from 65$\times $ at 99 tasks to 276$\times $ at 501 tasks (both measured), with a projected 452$\times $ at 1,000 tasks. Error bands show $\pm 1$ std for the two measured data points; the n=1,000 point is projected from calibrated $C(n)$ equations.\relax }{figure.caption.13}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.3}Experiment 2: Checkpoint Prefetching Effectiveness}{22}{section.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.1}Methodology}{22}{subsection.4.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.2}Results}{22}{subsection.4.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.2}{\ignorespaces Experiment 2: Checkpoint prefetching (90 tasks, 3 models: 0.6B, 8B, 32B; 30 each). Per-transition gap is the measured idle time between consecutive groups; latency hidden is computed from the average transition time.\relax }}{22}{table.caption.11}\protected@file@percent }
+\newlabel{tab:exp2_results}{{4.2}{22}{Experiment 2: Checkpoint prefetching (90 tasks, 3 models: 0.6B, 8B, 32B; 30 each). Per-transition gap is the measured idle time between consecutive groups; latency hidden is computed from the average transition time.\relax }{table.caption.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.3}Analysis}{22}{subsection.4.3.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.2}{\ignorespaces Illustrative execution timeline: without prefetch the GPU idles during model loading; with prefetch, loading overlaps with the preceding group's computation, hiding most of the transition cost.\relax }}{23}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:prefetch_timeline}{{4.2}{23}{Illustrative execution timeline: without prefetch the GPU idles during model loading; with prefetch, loading overlaps with the preceding group's computation, hiding most of the transition cost.\relax }{figure.caption.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.4}Experiment 3: Scalability and Robustness}{23}{section.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.1}Scaling with Batch Size}{23}{subsection.4.4.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.3}{\ignorespaces Makespan scalability across batch sizes (99--1,000 tasks, 3 models, log-log axes). FIFO grows linearly ($O(n)$ switches); Grouping and Shared-Aware incur only 2 fixed transitions. Solid lines are calibrated model fits over the measured range; dashed lines are projections to $n=1{,}000$. Error bars show $\pm 1$ std.\relax }}{24}{figure.caption.13}\protected@file@percent }
+\newlabel{fig:exp3_scalability}{{4.3}{24}{Makespan scalability across batch sizes (99--1,000 tasks, 3 models, log-log axes). FIFO grows linearly ($O(n)$ switches); Grouping and Shared-Aware incur only 2 fixed transitions. Solid lines are calibrated model fits over the measured range; dashed lines are projections to $n=1{,}000$. Error bars show $\pm 1$ std.\relax }{figure.caption.13}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {4.3}{\ignorespaces Experiment 3a: Scalability across batch sizes (3 models: 0.6B, 8B, 32B). Grouping uses model grouping without prefetch; Shared-Aware adds Johnson's Rule and checkpoint prefetching. FIFO values are measured extrapolations ($^\ddagger $) from cold-start sampling (90.3s/switch); rows marked $^\dagger $ are projected from $C(n)$ equations calibrated at those two anchor points.\relax }}{24}{table.caption.14}\protected@file@percent }
 \newlabel{tab:exp3_scale}{{4.3}{24}{Experiment 3a: Scalability across batch sizes (3 models: 0.6B, 8B, 32B). Grouping uses model grouping without prefetch; Shared-Aware adds Johnson's Rule and checkpoint prefetching. FIFO values are measured extrapolations ($^\ddagger $) from cold-start sampling (90.3s/switch); rows marked $^\dagger $ are projected from $C(n)$ equations calibrated at those two anchor points.\relax }{table.caption.14}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.5}Experiment 4: Johnson's Rule Ordering Ablation}{24}{section.4.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.1}Methodology}{24}{subsection.4.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.2}Results}{24}{subsection.4.5.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.3}Analysis}{24}{subsection.4.5.3}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {4.4}{\ignorespaces Experiment 4: All $3!=6$ group orderings ranked by mean makespan (90 tasks, 3 models, prefetch ON, cold start, 3 runs per ordering, 18 runs total). JR selects 0.6B$\to $8B$\to $32B and achieves rank\nobreakspace  {}1/6 (empirical optimum). The dominant factor is first-position choice: 0.6B-first orderings average 132.7s, 8B-first 174.4s (+31.7\% vs JR optimal 132.4s), and 32B-first 225.5s (+70.3\% vs JR optimal).\relax }}{25}{table.caption.15}\protected@file@percent }
-\newlabel{tab:exp4_ordering_results}{{4.4}{25}{Experiment 4: All $3!=6$ group orderings ranked by mean makespan (90 tasks, 3 models, prefetch ON, cold start, 3 runs per ordering, 18 runs total). JR selects 0.6B$\to $8B$\to $32B and achieves rank~1/6 (empirical optimum). The dominant factor is first-position choice: 0.6B-first orderings average 132.7s, 8B-first 174.4s (+31.7\% vs JR optimal 132.4s), and 32B-first 225.5s (+70.3\% vs JR optimal).\relax }{table.caption.15}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4.4}{\ignorespaces Execution timeline comparison (schematic): worst-case vs Johnson's Rule ordering for a 3-model batch. Worst case (top) places the I/O-heavy 32B model first, forcing 21.7s of unmasked GPU idle before any inference begins. Johnson's Rule (bottom) places the compute-heavy 0.6B group first to start the 32B prefetch early, then executes 32B while the trivially small 8B checkpoint loads, then finishes with 8B. The residual gap (12.7s) is smaller than the worst-case upfront idle (21.7s). The schematic uses $n{=}5$-style processing times (0.6B compute window = 9\,s) where the 32B SSD load (21.7\,s) is not fully covered, leaving a 12.7\,s residual; at $n{=}30$, the longer compute window covers both loads completely. In the measured $n{=}30$ experiment (Table\nobreakspace  {}\ref  {tab:exp4_ordering_results}), the worst-tier orderings (32B-first) averaged 225.5\,s vs 132.4\,s for JR (0.6B$\to $8B$\to $32B), a 70.3\% difference; the spread across all six permutations is 95.4\,s.\relax }}{25}{figure.caption.16}\protected@file@percent }
-\newlabel{fig:exp4_ordering_gantt}{{4.4}{25}{Execution timeline comparison (schematic): worst-case vs Johnson's Rule ordering for a 3-model batch. Worst case (top) places the I/O-heavy 32B model first, forcing 21.7s of unmasked GPU idle before any inference begins. Johnson's Rule (bottom) places the compute-heavy 0.6B group first to start the 32B prefetch early, then executes 32B while the trivially small 8B checkpoint loads, then finishes with 8B. The residual gap (12.7s) is smaller than the worst-case upfront idle (21.7s). The schematic uses $n{=}5$-style processing times (0.6B compute window = 9\,s) where the 32B SSD load (21.7\,s) is not fully covered, leaving a 12.7\,s residual; at $n{=}30$, the longer compute window covers both loads completely. In the measured $n{=}30$ experiment (Table~\ref {tab:exp4_ordering_results}), the worst-tier orderings (32B-first) averaged 225.5\,s vs 132.4\,s for JR (0.6B$\to $8B$\to $32B), a 70.3\% difference; the spread across all six permutations is 95.4\,s.\relax }{figure.caption.16}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.4}Regime Sensitivity: Task-Count Variation}{26}{subsection.4.5.4}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {4.5}{\ignorespaces Task-count sensitivity: makespan (mean\,$\pm $\,std, seconds) for six orderings at $n=5$ and 30 tasks per model (all six measured), with 0.6B-first orderings additionally measured at $n=15$. Bold: JR-predicted optimal per regime.\relax }}{27}{table.caption.17}\protected@file@percent }
-\newlabel{tab:exp4_sensitivity}{{4.5}{27}{Task-count sensitivity: makespan (mean\,$\pm $\,std, seconds) for six orderings at $n=5$ and 30 tasks per model (all six measured), with 0.6B-first orderings additionally measured at $n=15$. Bold: JR-predicted optimal per regime.\relax }{table.caption.17}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.6}Experiment 5: Storage Tier Impact on Prefetching}{27}{section.4.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.1}Methodology}{27}{subsection.4.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.5}Experiment 4: Johnson's Rule Ordering Ablation}{25}{section.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.1}Methodology}{25}{subsection.4.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.2}Results}{25}{subsection.4.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.3}Analysis}{25}{subsection.4.5.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.4}{\ignorespaces Experiment 4: All $3!=6$ group orderings ranked by mean makespan (90 tasks, 3 models, prefetch enabled, 3 runs each). Orderings naturally cluster into three tiers by first-position model.\relax }}{26}{table.caption.15}\protected@file@percent }
+\newlabel{tab:exp4_ordering_results}{{4.4}{26}{Experiment 4: All $3!=6$ group orderings ranked by mean makespan (90 tasks, 3 models, prefetch enabled, 3 runs each). Orderings naturally cluster into three tiers by first-position model.\relax }{table.caption.15}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.4}{\ignorespaces Schematic execution timeline: worst-case (32B-first, top) vs Johnson's Rule (0.6B-first, bottom) ordering. Placing the largest model first forces an unmasked GPU idle at $t=0$; placing the smallest model first allows prefetching to begin immediately, reducing the residual gap.\relax }}{26}{figure.caption.16}\protected@file@percent }
+\newlabel{fig:exp4_ordering_gantt}{{4.4}{26}{Schematic execution timeline: worst-case (32B-first, top) vs Johnson's Rule (0.6B-first, bottom) ordering. Placing the largest model first forces an unmasked GPU idle at $t=0$; placing the smallest model first allows prefetching to begin immediately, reducing the residual gap.\relax }{figure.caption.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.4}Regime Sensitivity: Task-Count Variation}{27}{subsection.4.5.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.5}{\ignorespaces Task-count sensitivity: makespan (mean\,$\pm $\,std, seconds) for all six group orderings at three batch sizes. Johnson's Rule selects a different optimal ordering depending on task count: at $n=5$, the 8B and 32B groups are I/O-dominant (load time exceeds compute time), so JR places them later; at $n\geq 15$, all groups are compute-dominant and JR sorts by ascending load time instead. The JR-selected ordering for each column is shown in bold.\relax }}{28}{table.caption.17}\protected@file@percent }
+\newlabel{tab:exp4_sensitivity}{{4.5}{28}{Task-count sensitivity: makespan (mean\,$\pm $\,std, seconds) for all six group orderings at three batch sizes. Johnson's Rule selects a different optimal ordering depending on task count: at $n=5$, the 8B and 32B groups are I/O-dominant (load time exceeds compute time), so JR places them later; at $n\geq 15$, all groups are compute-dominant and JR sorts by ascending load time instead. The JR-selected ordering for each column is shown in bold.\relax }{table.caption.17}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.6}Experiment 5: Storage Tier Impact on Prefetching}{28}{section.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.1}Methodology}{28}{subsection.4.6.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.6.2}Results}{28}{subsection.4.6.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {4.6}{\ignorespaces Storage tier comparison: model loading breakdown for 8B model (15.4\,GB). NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates ($\text  {size}/\text  {bandwidth}$).\relax }}{28}{table.caption.18}\protected@file@percent }
-\newlabel{tab:exp5_storage_results}{{4.6}{28}{Storage tier comparison: model loading breakdown for 8B model (15.4\,GB). NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates ($\text {size}/\text {bandwidth}$).\relax }{table.caption.18}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4.7}{\ignorespaces Experiment 5: End-to-end makespan by storage tier (60 tasks, 2 models). NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates.\relax }}{28}{table.caption.19}\protected@file@percent }
-\newlabel{tab:exp5_makespan_results}{{4.7}{28}{Experiment 5: End-to-end makespan by storage tier (60 tasks, 2 models). NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates.\relax }{table.caption.19}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.3}Analysis}{28}{subsection.4.6.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {4.7}Evaluation Summary}{28}{section.4.7}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.6}{\ignorespaces Storage tier comparison: model loading breakdown for 8B model (15.4\,GB). NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates ($\text  {size}/\text  {bandwidth}$).\relax }}{29}{table.caption.18}\protected@file@percent }
+\newlabel{tab:exp5_storage_results}{{4.6}{29}{Storage tier comparison: model loading breakdown for 8B model (15.4\,GB). NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates ($\text {size}/\text {bandwidth}$).\relax }{table.caption.18}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4.7}{\ignorespaces Experiment 5: End-to-end makespan by storage tier (60 tasks, 2 models). NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates.\relax }}{29}{table.caption.19}\protected@file@percent }
+\newlabel{tab:exp5_makespan_results}{{4.7}{29}{Experiment 5: End-to-end makespan by storage tier (60 tasks, 2 models). NVMe row is directly measured; rows marked $^\dagger $ are analytical estimates.\relax }{table.caption.19}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {4.5}{\ignorespaces Storage tier impact on prefetching (8B model, 15.4\,GB): (a)\nobreakspace  {}loading time decomposition showing read time vs irreducible DMA time, with prefetch coverage annotated; (b)\nobreakspace  {}end-to-end makespan with and without prefetching. Prefetching provides the largest benefit for 10\,GbE NFS (23.1\% reduction), where read latency is highest.\relax }}{29}{figure.caption.20}\protected@file@percent }
 \newlabel{fig:exp5_storage_tier}{{4.5}{29}{Storage tier impact on prefetching (8B model, 15.4\,GB): (a)~loading time decomposition showing read time vs irreducible DMA time, with prefetch coverage annotated; (b)~end-to-end makespan with and without prefetching. Prefetching provides the largest benefit for 10\,GbE NFS (23.1\% reduction), where read latency is highest.\relax }{figure.caption.20}{}}
-\@writefile{toc}{\contentsline {chapter}{\numberline {5}Discussion}{30}{chapter.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6.3}Analysis}{30}{subsection.4.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.7}Evaluation Summary}{30}{section.4.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {5}Discussion}{31}{chapter.5}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {5.1}Answering the Research Questions}{30}{section.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{\numberline {5.1.0.0.1}RQ1: How to Discover and Exploit Shared Structure?}{30}{paragraph.5.1.0.0.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{\numberline {5.1.0.0.2}RQ2: Can the Problem Be Modelled as a Two-Machine Flow-Shop?}{30}{paragraph.5.1.0.0.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{\numberline {5.1.0.0.3}RQ3: How Do Strategies Compare?}{30}{paragraph.5.1.0.0.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5.2}New Contributions versus Reused Components}{30}{section.5.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5.3}Design Trade-offs}{31}{section.5.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5.4}Algorithm Limitations}{31}{section.5.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5.5}Threats to Validity}{32}{section.5.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{\numberline {5.5.0.0.1}Internal Validity}{32}{paragraph.5.5.0.0.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{\numberline {5.5.0.0.2}External Validity}{32}{paragraph.5.5.0.0.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{\numberline {5.5.0.0.3}Construct Validity}{32}{paragraph.5.5.0.0.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.1}Answering the Research Questions}{31}{section.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.2}New Contributions versus Reused Components}{31}{section.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.3}Design Trade-offs}{32}{section.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.4}Algorithm Limitations}{32}{section.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.5}Threats to Validity}{33}{section.5.5}\protected@file@percent }
 \citation{sheng2024slora}
 \citation{zheng2024sglang}
 \citation{tensorrt_llm2024}
-\@writefile{toc}{\contentsline {chapter}{\numberline {6}Future Work}{33}{chapter.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {6}Future Work}{34}{chapter.6}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{ch:future}{{6}{33}{Future Work}{chapter.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.1}Inference-Level Extensions: Prefix-Aware Ordering and Multi-LoRA}{33}{section.6.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {6.2}Storage Extensions: Adaptive and Network-Aware Prefetching}{33}{section.6.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {6.3}Production Readiness: Scalability and Engine Abstraction}{33}{section.6.3}\protected@file@percent }
+\newlabel{ch:future}{{6}{34}{Future Work}{chapter.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.1}Inference-Level Extensions: Prefix-Aware Ordering and Multi-LoRA}{34}{section.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6.2}Storage Extensions: Adaptive and Network-Aware Prefetching}{34}{section.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6.3}Production Readiness: Scalability and Engine Abstraction}{34}{section.6.3}\protected@file@percent }
 \bibstyle{plainnat}
 \bibdata{mybibfile}
-\@writefile{toc}{\contentsline {chapter}{\numberline {7}Conclusion}{35}{chapter.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {7}Conclusion}{36}{chapter.7}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {7.1}Contributions}{35}{section.7.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.2}Key Findings}{35}{section.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.1}Contributions}{36}{section.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.2}Key Findings}{36}{section.7.2}\protected@file@percent }
 \bibcite{agache2020firecracker}{{1}{2020}{{Agache et~al.}}{{Agache, Brooker, Iordache, Liguori, Neugebauer, Piwonka, and Popa}}}
 \bibcite{aws_bedrock_batch}{{2}{2024}{{Amazon Web Services}}{{}}}
 \bibcite{aminabadi2022deepspeed}{{3}{2022}{{Aminabadi et~al.}}{{Aminabadi, Rajbhandari, Awan, Li, Li, Zheng, Ruwase, Smith, Zhang, Rasley, and He}}}
@@ -221,7 +215,7 @@
 \bibcite{dean2008mapreduce}{{7}{2008}{{Dean and Ghemawat}}{{}}}
 \bibcite{fu2024serverlessllm}{{8}{2024}{{Fu et~al.}}{{Fu, Xue, Huang, Brabete, Ustiugov, Patel, and Mai}}}
 \bibcite{ghodsi2011dominant}{{9}{2011}{{Ghodsi et~al.}}{{Ghodsi, Zaharia, Hindman, Konwinski, Shenker, and Stoica}}}
-\@writefile{toc}{\contentsline {chapter}{Bibliography}{36}{chapter*.21}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{Bibliography}{37}{chapter*.21}\protected@file@percent }
 \bibcite{graham1966bounds}{{10}{1966}{{Graham}}{{}}}
 \bibcite{graham1969bounds}{{11}{1969}{{Graham}}{{}}}
 \bibcite{grpc2024}{{12}{2024}{{gRPC Authors}}{{}}}
@@ -251,4 +245,4 @@
 \bibcite{zaharia2010spark}{{36}{2010}{{Zaharia et~al.}}{{Zaharia, Chowdhury, Franklin, Shenker, and Stoica}}}
 \bibcite{zheng2023judging}{{37}{2023}{{Zheng et~al.}}{{Zheng, Chiang, Sheng, Zhuang, Wu, Zhuang, Lin, Li, Li, Xing, et~al.}}}
 \bibcite{zheng2024sglang}{{38}{2024}{{Zheng et~al.}}{{Zheng, Yin, Xie, Sun, Huang, Yu, Cao, Kozyrakis, Stoica, Gonzalez, Barrett, and Sheng}}}
-\gdef \@abspage@last{46}
+\gdef \@abspage@last{47}
