@@ -114,7 +114,7 @@ class BatchScheduler:
         try:
             import torch
             if torch.cuda.is_available():
-                self._gpu_mem_bytes = torch.cuda.get_device_properties(0).total_mem
+                self._gpu_mem_bytes = torch.cuda.get_device_properties(0).total_memory
                 logger.info(
                     f"Detected GPU memory: {self._gpu_mem_bytes / 1e9:.1f} GB"
                 )
@@ -123,7 +123,10 @@ class BatchScheduler:
             pass
         # Fallback: parse nvidia-smi
         try:
-            gpu_ids = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+            # Treat empty-string CUDA_VISIBLE_DEVICES like unset (startup script
+            # may export it empty when caller hasn't set it).
+            cvd = os.environ.get("CUDA_VISIBLE_DEVICES") or "0"
+            gpu_ids = cvd.split(",")[0]
             result = subprocess.run(
                 ["nvidia-smi", f"--id={gpu_ids}",
                  "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
