@@ -40,7 +40,11 @@ from sllm.logger import init_logger
 logger = init_logger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 5
+# v3 = deployments/node_storage/deployment_endpoints (upstream)
+# v4 = batch_jobs/batch_tasks (local: batch scheduler)
+# v5 = files + batch_jobs.input_file_id (local: file management)
+# v6 = deployments.download_node + failure_reason (PR #328 renumbered from v4)
+SCHEMA_VERSION = 6
 
 @dataclass
 class Deployment:
@@ -48,11 +52,18 @@ class Deployment:
     
     A deployment represents a (model_name, backend) pair - the basic
     scheduling and control unit in ServerlessLLM.
+
+    Status values:
+    - "pending": Deployment created, checking model availability
+    - "downloading": Model download in progress on download_node
+    - "active": Model available, ready for scaling and instance creation
+    - "deleting": Being cleaned up
+    - "failed": Download or other operation failed
     """
     id: str  # deployment_id: "meta-llama/Llama-3.1-8B:vllm"
     model_name: str  # HuggingFace model: "meta-llama/Llama-3.1-8B"
     backend: str  # "vllm" or "sglang"
-    status: str  # "active", "deleting"
+    status: str  # "pending", "downloading", "active", "deleting", "failed"
     desired_replicas: int
     min_replicas: int
     max_replicas: int
@@ -61,6 +72,10 @@ class Deployment:
     backend_config: Optional[Dict]
     created_at: str
     updated_at: str
+    download_node: Optional[str] = (
+        None  # Node where model is being/was downloaded
+    )
+    failure_reason: Optional[str] = None  # Reason for failed status
 
     @staticmethod
     def make_id(model_name: str, backend: str) -> str:
@@ -323,6 +338,8 @@ class Database:
             self._migrate_v4(conn)
         if from_version < 5:
             self._migrate_v5(conn)
+        if from_version < 6:
+            self._migrate_v6(conn)
 
         # Update schema version
         conn.execute("DELETE FROM schema_version")
@@ -387,7 +404,7 @@ class Database:
         logger.info("Created v3 schema with deployment terminology")
 
     def _migrate_v4(self, conn: sqlite3.Connection):
-        """Create v4 schema with batch job support (Squashed v4-v6)."""
+        """Create v4 schema with batch job support."""
         # Batch Jobs table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS batch_jobs (
@@ -446,6 +463,21 @@ class Database:
 
         logger.info("Created v5 schema (File Support)")
 
+    def _migrate_v6(self, conn: sqlite3.Connection):
+        """Add download tracking columns for deploy-time model downloads.
+
+        Renumbered from PR #328's v4 to avoid collision with our v4 (batch_jobs).
+        """
+        try:
+            conn.execute("ALTER TABLE deployments ADD COLUMN download_node TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            conn.execute("ALTER TABLE deployments ADD COLUMN failure_reason TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        logger.info("Added download tracking columns (v6 migration)")
+
     # -------------------------------------------------------------------------
     # Deployment CRUD Operations
     # -------------------------------------------------------------------------
@@ -459,8 +491,17 @@ class Database:
         target_pending_requests: int = 5,
         keep_alive_seconds: int = 0,
         backend_config: Optional[Dict] = None,
+        initial_status: str = "pending",
+        download_node: Optional[str] = None,
     ) -> Deployment:
-        """Create a new deployment entry."""
+        """Create a new deployment entry.
+
+        Args:
+            initial_status: Starting status ('pending' or 'downloading'). The
+                'ready' status is reserved for future use and is not currently
+                used in the deployment lifecycle.
+            download_node: Node where model download is happening (if downloading)
+        """
         conn = self._get_connection()
         now = datetime.now(timezone.utc).isoformat()
         deployment_id = Deployment.make_id(model_name, backend)
@@ -475,13 +516,15 @@ class Database:
                 INSERT INTO deployments (
                     id, model_name, backend, status, desired_replicas,
                     min_replicas, max_replicas, target_pending_requests,
-                    keep_alive_seconds, backend_config, created_at, updated_at
-                ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
+                    keep_alive_seconds, backend_config, created_at, updated_at,
+                    download_node
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     deployment_id,
                     model_name,
                     backend,
+                    initial_status,
                     min_replicas,  # desired starts at min
                     min_replicas,
                     max_replicas,
@@ -490,12 +533,15 @@ class Database:
                     backend_config_json,
                     now,
                     now,
+                    download_node,
                 ),
             )
         except sqlite3.IntegrityError:
             raise ValueError(f"Deployment {deployment_id} already exists")
 
-        logger.info(f"Created deployment {deployment_id}")
+        logger.info(
+            f"Created deployment {deployment_id} with status={initial_status}"
+        )
         return self.get_deployment(model_name, backend)
 
     def get_deployment(
@@ -584,6 +630,93 @@ class Database:
             return True
         return False
 
+    def update_deployment_download_status(
+        self,
+        deployment_id: str,
+        status: str,
+        download_node: Optional[str] = None,
+        failure_reason: Optional[str] = None,
+    ) -> bool:
+        """Update deployment download status and related fields.
+
+        Args:
+            deployment_id: Deployment to update
+            status: New status ('downloading', 'active', 'failed')
+            download_node: Node where download is happening/happened
+            failure_reason: Error message if status is 'failed'
+
+        Returns:
+            True if updated successfully
+        """
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+
+        cursor = conn.execute(
+            """
+            UPDATE deployments
+            SET status = ?, download_node = ?, failure_reason = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (status, download_node, failure_reason, now, deployment_id),
+        )
+
+        if cursor.rowcount > 0:
+            logger.info(
+                f"Deployment {deployment_id} download status: {status}"
+                + (f" on {download_node}" if download_node else "")
+            )
+            return True
+        return False
+
+    def update_deployment_download_status_if_not_deleting(
+        self,
+        deployment_id: str,
+        status: str,
+        download_node: Optional[str] = None,
+        failure_reason: Optional[str] = None,
+    ) -> bool:
+        """Update deployment download status only if not being deleted.
+
+        This prevents background download tasks from overwriting the 'deleting'
+        status when the user has requested deletion during a download.
+
+        Args:
+            deployment_id: Deployment to update
+            status: New status ('downloading', 'ready', 'failed')
+            download_node: Node where download is happening/happened
+            failure_reason: Error message if status is 'failed'
+
+        Returns:
+            True if updated, False if deployment not found or is being deleted
+        """
+        conn = self._get_connection()
+        now = datetime.now(timezone.utc).isoformat()
+
+        cursor = conn.execute(
+            """
+            UPDATE deployments
+            SET status = ?, download_node = ?, failure_reason = ?, updated_at = ?
+            WHERE id = ? AND status != 'deleting'
+            """,
+            (status, download_node, failure_reason, now, deployment_id),
+        )
+
+        if cursor.rowcount > 0:
+            logger.info(
+                f"Deployment {deployment_id} download status: {status}"
+                + (f" on {download_node}" if download_node else "")
+            )
+            return True
+        return False
+
+    def get_downloading_deployments(self) -> List[Deployment]:
+        """Get all deployments in downloading status."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT * FROM deployments WHERE status = 'downloading'"
+        ).fetchall()
+        return [self._row_to_deployment(row) for row in rows]
+
     def delete_deployment(self, deployment_id: str) -> bool:
         """Delete a deployment. Returns True if deleted."""
         conn = self._get_connection()
@@ -615,6 +748,12 @@ class Database:
             backend_config=backend_config,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            download_node=row["download_node"]
+            if "download_node" in row.keys()
+            else None,
+            failure_reason=row["failure_reason"]
+            if "failure_reason" in row.keys()
+            else None,
         )
 
     # -------------------------------------------------------------------------

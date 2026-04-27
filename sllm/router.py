@@ -57,6 +57,8 @@ logger = init_logger(__name__)
 class RouterConfig:
     """Router configuration."""
 
+    # NOTE: defaults raised vs upstream PR #328 (10 / 180 / 300) to suit batch
+    # workloads — bigger buffer + longer cold-start tolerance for queued tasks.
     max_buffer_size: int = 100
     cold_start_timeout: float = 600.0
     request_timeout: float = 600.0
@@ -218,6 +220,7 @@ class Router:
         endpoint: str,
         payload: Dict[str, Any],
         path: str,
+        _retries_left: int = 1,
     ) -> Dict[str, Any]:
         """Forward request to a specific endpoint."""
         url = f"http://{endpoint}{path}"
@@ -250,7 +253,7 @@ class Router:
             logger.error(f"[{deployment_id}] Request to {endpoint} failed: {e}")
 
             # Retry on another endpoint if available and configured
-            if self.config.retry_failed_endpoint:
+            if self.config.retry_failed_endpoint and _retries_left > 0:
                 endpoints = self.database.get_deployment_endpoints(
                     deployment_id
                 )
@@ -267,7 +270,11 @@ class Router:
                     # Decrement in-flight before retry (will be incremented again)
                     self._in_flight[deployment_id] -= 1
                     return await self._forward_to_endpoint(
-                        deployment_id, other_endpoint, payload, path
+                        deployment_id,
+                        other_endpoint,
+                        payload,
+                        path,
+                        _retries_left - 1,
                     )
 
             raise Exception(f"Failed to forward request: {e}")
@@ -289,7 +296,6 @@ class Router:
         path: str,
     ) -> Dict[str, Any]:
         """Buffer request during cold start and wait for endpoint."""
-        # Get or create buffer for deployment
         if deployment_id not in self._buffers:
             self._buffers[deployment_id] = asyncio.Queue(
                 maxsize=self.config.max_buffer_size

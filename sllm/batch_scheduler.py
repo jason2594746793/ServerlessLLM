@@ -329,9 +329,34 @@ class BatchScheduler:
         # from ~50s to ~10-15s per model switch. Slightly slower per-token
         # throughput but amortised over large batches.
         backend_config["enforce_eager"] = True
+        # PR #328: route through download flow when storage_manager is wired.
+        # Cached models take the fast path (initial_status='active'); uncached
+        # ones are created as 'downloading' and we await the download here.
+        model_cached = True
+        download_node: Optional[str] = None
+        if self.storage_manager is not None:
+            try:
+                nodes_with_model = self.storage_manager.get_nodes_with_model(model)
+                model_cached = bool(nodes_with_model)
+            except Exception as e:
+                logger.warning(f"Cache check failed for {model}, assuming cached: {e}")
+                model_cached = True
+            if not model_cached and self.pylet_client is not None:
+                try:
+                    workers = await self.pylet_client.get_online_workers()
+                    if workers:
+                        download_node = workers[0].worker_id
+                except Exception as e:
+                    logger.warning(f"Could not pick download node for {model}: {e}")
+
         if not deployment:
             available_gpus = await self._get_available_gpu_count()
-            logger.info(f"Auto-creating deployment for {model} (max_replicas={available_gpus}, tp={tp})")
+            initial_status = "active" if model_cached else "downloading"
+            logger.info(
+                f"Auto-creating deployment for {model} "
+                f"(max_replicas={available_gpus}, tp={tp}, "
+                f"cached={model_cached}, status={initial_status})"
+            )
             try:
                 self.database.create_deployment(
                     model_name=model,
@@ -339,16 +364,44 @@ class BatchScheduler:
                     min_replicas=0,
                     max_replicas=available_gpus,
                     backend_config=backend_config,
+                    initial_status=initial_status,
+                    download_node=download_node,
                 )
             except Exception as e:
                 if "already exists" in str(e):
                     logger.info(f"Deployment {deployment_id} created by concurrent caller, continuing")
                 else:
                     raise
+
+            if initial_status == "downloading":
+                await self._await_model_download(
+                    deployment_id, model, download_node, timeout=timeout
+                )
         else:
             # Deployment exists — fix any state that would prevent scaling.
             available_gpus = await self._get_available_gpu_count()
             needs_update = False
+
+            # PR #328: a prior call may have left the deployment in
+            # 'downloading' or 'pending'. Wait for it to resolve before
+            # touching replicas, and fail fast if it landed in 'failed'.
+            if deployment.status in ("downloading", "pending"):
+                logger.info(
+                    f"[WAIT-DOWNLOAD] {deployment_id} is {deployment.status}, "
+                    f"waiting before scaling"
+                )
+                await self._await_model_download(
+                    deployment_id, model,
+                    deployment.download_node,
+                    timeout=timeout,
+                    already_started=True,
+                )
+                deployment = self.database.get_deployment_by_id(deployment_id)
+            elif deployment.status == "failed":
+                raise RuntimeError(
+                    f"Deployment {deployment_id} previously failed: "
+                    f"{deployment.failure_reason or '<no reason>'}"
+                )
 
             # Resurrect "deleting" deployments left by previous batches.
             if deployment.status == "deleting":
@@ -394,6 +447,75 @@ class BatchScheduler:
         raise TimeoutError(
             f"Model {model} not ready after {timeout}s -- no endpoints appeared. "
             f"Check reconciler/pylet logs."
+        )
+
+    async def _await_model_download(
+        self,
+        deployment_id: str,
+        model: str,
+        download_node: Optional[str],
+        timeout: float,
+        already_started: bool = False,
+    ):
+        """Wait for a model download (PR #328) to complete.
+
+        If ``already_started`` is False we drive the download synchronously
+        via ``storage_manager.download_model_on_node``. Otherwise we just
+        poll the deployment row, since some other caller (the api_gateway
+        or a prior scheduler turn) is responsible for completion.
+        """
+        if not already_started:
+            if not self.storage_manager or not download_node:
+                raise RuntimeError(
+                    f"Cannot drive download for {deployment_id}: "
+                    f"storage_manager={bool(self.storage_manager)}, "
+                    f"download_node={download_node!r}"
+                )
+            try:
+                ok = await self.storage_manager.download_model_on_node(
+                    download_node, model, "vllm"
+                )
+            except Exception as e:
+                self.database.update_deployment_download_status_if_not_deleting(
+                    deployment_id, status="failed",
+                    download_node=download_node, failure_reason=str(e),
+                )
+                raise
+
+            if ok:
+                self.database.update_deployment_download_status_if_not_deleting(
+                    deployment_id, status="active",
+                    download_node=download_node,
+                )
+                logger.info(f"[DOWNLOAD] {model} ready on {download_node}")
+                return
+            self.database.update_deployment_download_status_if_not_deleting(
+                deployment_id, status="failed",
+                download_node=download_node,
+                failure_reason="download_model_on_node returned False",
+            )
+            raise RuntimeError(
+                f"Download failed for {model} on {download_node}"
+            )
+
+        elapsed = 0.0
+        poll_interval = 1.0
+        while elapsed < timeout:
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+            d = self.database.get_deployment_by_id(deployment_id)
+            if not d:
+                raise RuntimeError(f"Deployment {deployment_id} disappeared mid-download")
+            if d.status == "active":
+                return
+            if d.status == "failed":
+                raise RuntimeError(
+                    f"Deployment {deployment_id} download failed: "
+                    f"{d.failure_reason or '<no reason>'}"
+                )
+            poll_interval = min(poll_interval * 1.2, 5.0)
+        raise TimeoutError(
+            f"Deployment {deployment_id} stuck in download after {timeout}s"
         )
 
     # ------------------------------------------------------------------ #
@@ -1085,12 +1207,15 @@ class BatchScheduler:
         if not deployment:
             logger.info(f"Auto-creating deployment for {model} (max_replicas={max_replicas}, tp={tp})")
             try:
+                # Force 'active': this allocation-aware path assumes the
+                # caller has already arranged for the model to be cached.
                 self.database.create_deployment(
                     model_name=model,
                     backend="vllm",
                     min_replicas=0,
                     max_replicas=max_replicas,
                     backend_config=backend_config,
+                    initial_status="active",
                 )
             except Exception as e:
                 if "already exists" in str(e):
@@ -1511,10 +1636,15 @@ class BatchScheduler:
                 replicas = max(1, available_gpus // max(tp, 1))
                 if not deployment:
                     try:
+                        # Last-resort fallback at task-execute time. We assume
+                        # the model is already cached; if not, the autoscaler
+                        # will fail to bring up an instance and the task will
+                        # surface a clear error rather than hanging.
                         self.database.create_deployment(
                             model_name=model, backend="vllm",
                             min_replicas=0, max_replicas=replicas,
                             backend_config=bc,
+                            initial_status="active",
                         )
                     except Exception as e:
                         if "already exists" not in str(e):
