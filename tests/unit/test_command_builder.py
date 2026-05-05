@@ -121,7 +121,9 @@ class TestBuildVllmCommand:
 
         assert "vllm serve" in cmd
         assert "--tensor-parallel-size 1" in cmd  # Default
-        assert "--max-model-len" not in cmd  # Not set
+        # max_model_len defaults to 4096 — many newer models (e.g. Qwen3-8B)
+        # default to 40k+ context which blows 24GB cards on cold start.
+        assert "--max-model-len 4096" in cmd
         assert "--gpu-memory-utilization" not in cmd  # Not set
 
     def test_none_backend_config(self):
@@ -134,6 +136,57 @@ class TestBuildVllmCommand:
         cmd, _ = build_vllm_command(deployment)
 
         assert "vllm serve" in cmd
+
+    def test_load_format_when_shards_present(self, tmp_path):
+        """When sllm-store rank shards exist, --load-format serverless_llm
+        is set AND the model arg is rewritten to the local directory path
+        (the loader's load_model() asserts os.path.isdir on it)."""
+        deployment = MagicMock(spec=Deployment)
+        deployment.model_name = "shard-model"
+        deployment.backend = "vllm"
+        deployment.backend_config = {"tensor_parallel_size": 2}
+
+        model_dir = tmp_path / "shard-model"
+        for r in range(2):
+            (model_dir / f"rank_{r}").mkdir(parents=True)
+            (model_dir / f"rank_{r}" / "tensor.data_0").write_bytes(b"\0")
+
+        cmd, _ = build_vllm_command(deployment, storage_path=str(tmp_path))
+
+        assert "--load-format serverless_llm" in cmd
+        # Model arg = local path, not HF id
+        assert f"vllm serve {model_dir}" in cmd
+        # served-model-name still uses the original HF id
+        assert f"--served-model-name shard-model" in cmd
+
+    def test_load_format_skipped_when_shards_missing(self, tmp_path):
+        """When shards are missing, fall back to HF safetensors loader and
+        keep the model arg as the HF id so vLLM downloads from the hub."""
+        deployment = MagicMock(spec=Deployment)
+        deployment.model_name = "no-shards"
+        deployment.backend = "vllm"
+        deployment.backend_config = {"tensor_parallel_size": 2}
+
+        cmd, _ = build_vllm_command(deployment, storage_path=str(tmp_path))
+
+        assert "--load-format serverless_llm" not in cmd
+        assert "vllm serve no-shards" in cmd
+
+    def test_load_format_skipped_when_partial_shards(self, tmp_path):
+        """Partial save (rank_0 only, but TP=2) → fall back, don't crash later."""
+        deployment = MagicMock(spec=Deployment)
+        deployment.model_name = "partial"
+        deployment.backend = "vllm"
+        deployment.backend_config = {"tensor_parallel_size": 2}
+
+        model_dir = tmp_path / "partial"
+        (model_dir / "rank_0").mkdir(parents=True)
+        (model_dir / "rank_0" / "tensor.data_0").write_bytes(b"\0")
+        # rank_1 missing
+
+        cmd, _ = build_vllm_command(deployment, storage_path=str(tmp_path))
+
+        assert "--load-format serverless_llm" not in cmd
 
 
 class TestBuildSglangCommand:

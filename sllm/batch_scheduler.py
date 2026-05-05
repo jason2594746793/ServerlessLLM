@@ -309,12 +309,29 @@ class BatchScheduler:
             logger.warning(f"Failed to query GPU count: {e}")
             return 1
 
-    async def _ensure_deployment_ready(self, model: str, timeout: float = 300.0):
-        """Ensure a model's deployment exists and has live endpoints."""
+    async def _ensure_deployment_ready(
+        self,
+        model: str,
+        max_replicas: Optional[int] = None,
+        timeout: float = 300.0,
+    ):
+        """Ensure a model's deployment exists and has live endpoints.
+
+        ``max_replicas=None`` (default) auto-sizes to the total GPU count
+        across online workers — the right choice when the caller hasn't
+        done its own GPU allocation. The multi-GPU lane scheduler passes
+        an explicit value because it has already partitioned GPUs.
+
+        On 'downloading'/'pending' status, waits for the download to
+        finish. On 'failed', raises immediately.
+        """
         if model in self._models_ready:
             return f"{model}:vllm"
 
         deployment_id = f"{model}:vllm"
+
+        if max_replicas is None:
+            max_replicas = await self._get_available_gpu_count()
 
         deployment = self.database.get_deployment_by_id(deployment_id)
         tp = self._get_tp(model)
@@ -350,11 +367,10 @@ class BatchScheduler:
                     logger.warning(f"Could not pick download node for {model}: {e}")
 
         if not deployment:
-            available_gpus = await self._get_available_gpu_count()
             initial_status = "active" if model_cached else "downloading"
             logger.info(
                 f"Auto-creating deployment for {model} "
-                f"(max_replicas={available_gpus}, tp={tp}, "
+                f"(max_replicas={max_replicas}, tp={tp}, "
                 f"cached={model_cached}, status={initial_status})"
             )
             try:
@@ -362,7 +378,7 @@ class BatchScheduler:
                     model_name=model,
                     backend="vllm",
                     min_replicas=0,
-                    max_replicas=available_gpus,
+                    max_replicas=max_replicas,
                     backend_config=backend_config,
                     initial_status=initial_status,
                     download_node=download_node,
@@ -379,7 +395,6 @@ class BatchScheduler:
                 )
         else:
             # Deployment exists — fix any state that would prevent scaling.
-            available_gpus = await self._get_available_gpu_count()
             needs_update = False
 
             # PR #328: a prior call may have left the deployment in
@@ -410,17 +425,18 @@ class BatchScheduler:
                 needs_update = True
 
             # A previous batch's _prepare_gpu_allocations may have set
-            # max_replicas=0, which blocks the autoscaler.
-            if deployment.max_replicas < 1:
+            # max_replicas below what we need now (e.g. 0 to block scaling,
+            # or a smaller value from a previous lane assignment).
+            if deployment.max_replicas < max_replicas:
                 logger.info(
                     f"[SCALE-UP] {deployment_id}: max_replicas was "
-                    f"{deployment.max_replicas}, raising to {available_gpus}"
+                    f"{deployment.max_replicas}, raising to {max_replicas}"
                 )
                 needs_update = True
 
             if needs_update:
-                self.database.update_max_replicas(deployment_id, available_gpus)
-                self.database.update_desired_replicas(deployment_id, 1)
+                self.database.update_max_replicas(deployment_id, max_replicas)
+                self.database.update_desired_replicas(deployment_id, max_replicas)
 
         if self.autoscaler:
             self.autoscaler.receive_metrics(deployment_id, buffer_len=1, in_flight=0)
@@ -471,9 +487,11 @@ class BatchScheduler:
                     f"storage_manager={bool(self.storage_manager)}, "
                     f"download_node={download_node!r}"
                 )
+            tp = self._get_tp(model)
             try:
                 ok = await self.storage_manager.download_model_on_node(
-                    download_node, model, "vllm"
+                    download_node, model, "vllm",
+                    tensor_parallel_size=tp,
                 )
             except Exception as e:
                 self.database.update_deployment_download_status_if_not_deleting(
@@ -1161,7 +1179,7 @@ class BatchScheduler:
 
         for group_idx, (model_name, group_tasks) in enumerate(queue):
             replicas = num_replicas_per_model.get(model_name, 1)
-            await self._ensure_deployment_ready_with_replicas(model_name, replicas)
+            await self._ensure_deployment_ready(model_name, max_replicas=replicas)
 
             logger.info(
                 f"[GPU {gpu_id}] Starting group {group_idx+1}/{len(queue)}: "
@@ -1188,89 +1206,6 @@ class BatchScheduler:
                 else:
                     # Single-lane or legacy path — safe to unload
                     await self._do_unload(model_name)
-
-    async def _ensure_deployment_ready_with_replicas(self, model: str, max_replicas: int, timeout: float = 300.0):
-        """Like _ensure_deployment_ready but with a specific replica count."""
-        if model in self._models_ready:
-            return f"{model}:vllm"
-
-        deployment_id = f"{model}:vllm"
-        tp = self._get_tp(model)
-        gpu_mem_util = float(os.environ.get("SLLM_GPU_MEM_UTIL", "0.85"))
-        if tp > 1:
-            backend_config = {"tensor_parallel_size": tp,
-                              "gpu_memory_utilization": gpu_mem_util}
-        else:
-            backend_config = {"gpu_memory_utilization": gpu_mem_util}
-        backend_config["enforce_eager"] = True
-        deployment = self.database.get_deployment_by_id(deployment_id)
-        if not deployment:
-            logger.info(f"Auto-creating deployment for {model} (max_replicas={max_replicas}, tp={tp})")
-            try:
-                # Force 'active': this allocation-aware path assumes the
-                # caller has already arranged for the model to be cached.
-                self.database.create_deployment(
-                    model_name=model,
-                    backend="vllm",
-                    min_replicas=0,
-                    max_replicas=max_replicas,
-                    backend_config=backend_config,
-                    initial_status="active",
-                )
-            except Exception as e:
-                if "already exists" in str(e):
-                    logger.info(f"Deployment {deployment_id} created by concurrent caller, continuing")
-                else:
-                    raise
-        else:
-            # Deployment exists — fix any state that would prevent scaling.
-            needs_update = False
-
-            # Resurrect "deleting" deployments left by previous batches.
-            if deployment.status == "deleting":
-                logger.info(f"[RESURRECT] {deployment_id}: was 'deleting', setting back to 'active'")
-                self.database.update_deployment_status(deployment_id, "active")
-                needs_update = True
-
-            # A previous batch's _prepare_gpu_allocations may have set
-            # max_replicas=0, which blocks the autoscaler.
-            if deployment.max_replicas < max_replicas:
-                logger.info(
-                    f"[SCALE-UP] {deployment_id}: max_replicas was "
-                    f"{deployment.max_replicas}, raising to {max_replicas}"
-                )
-                needs_update = True
-
-            if needs_update:
-                self.database.update_max_replicas(deployment_id, max_replicas)
-                self.database.update_desired_replicas(deployment_id, max_replicas)
-
-        if self.autoscaler:
-            self.autoscaler.receive_metrics(deployment_id, buffer_len=1, in_flight=0)
-
-        endpoints = self.database.get_deployment_endpoints(deployment_id)
-        if endpoints:
-            logger.info(f"[READY] {model} already has {len(endpoints)} endpoint(s)")
-            self._models_ready.add(model)
-            return deployment_id
-
-        logger.info(f"[WAIT] Waiting for {model} endpoints (timeout={timeout}s)...")
-        poll_interval = 1.0
-        elapsed = 0.0
-        while elapsed < timeout:
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
-            endpoints = self.database.get_deployment_endpoints(deployment_id)
-            if endpoints:
-                logger.info(f"[READY] {model} endpoint(s) live after {elapsed:.1f}s")
-                self._models_ready.add(model)
-                return deployment_id
-            poll_interval = min(poll_interval * 1.2, 5.0)
-
-        raise TimeoutError(
-            f"Model {model} not ready after {timeout}s -- no endpoints appeared. "
-            f"Check reconciler/pylet logs."
-        )
 
     async def _process_with_prefetch(self, pending_tasks: List[BatchTask], do_prefetch: bool = True):
         groups = self._extract_model_groups(pending_tasks)
@@ -1496,30 +1431,49 @@ class BatchScheduler:
     def _get_checkpoint_size_bytes(self, model_name: str) -> int:
         """Return total checkpoint size in bytes by scanning the model directory.
 
-        Falls back to ``_estimated_model_sizes`` cache, then 0 if unavailable.
+        Falls back to ``_estimated_model_sizes`` cache, then to the local HF
+        hub cache (so TP can be auto-detected for uncached models that have
+        already been pulled to ~/.cache/huggingface), then 0 if unavailable.
         """
         cached = self._estimated_model_sizes.get(model_name, 0)
         if cached > 0:
             return cached
 
-        if self.storage_manager is None:
-            return 0
-
-        model_dir = os.path.join(self.storage_manager.storage_path, model_name)
-        if not os.path.isdir(model_dir):
-            return 0
-
-        # Prefer sllm-store native format (tensor.data_*) if present; fall back
-        # to HuggingFace checkpoint files.  Never double-count both formats.
         sllm_total = 0
         hf_total = 0
-        for root, _dirs, files in os.walk(model_dir):
-            for fname in files:
-                if fname.startswith("tensor.data"):
-                    sllm_total += os.path.getsize(os.path.join(root, fname))
-                elif fname.endswith((".safetensors", ".bin", ".pt", ".gguf")):
-                    hf_total += os.path.getsize(os.path.join(root, fname))
+
+        if self.storage_manager is not None:
+            model_dir = os.path.join(self.storage_manager.storage_path, model_name)
+            if os.path.isdir(model_dir):
+                # Prefer sllm-store native format (tensor.data_*) if present;
+                # fall back to HuggingFace checkpoint files. Never double-count.
+                for root, _dirs, files in os.walk(model_dir):
+                    for fname in files:
+                        if fname.startswith("tensor.data"):
+                            sllm_total += os.path.getsize(os.path.join(root, fname))
+                        elif fname.endswith((".safetensors", ".bin", ".pt", ".gguf")):
+                            hf_total += os.path.getsize(os.path.join(root, fname))
+
         total = sllm_total if sllm_total > 0 else hf_total
+
+        # HF hub cache fallback: when storage_path is empty (typical first run
+        # for an "uncached" model), look for ~/.cache/huggingface/hub/models--{org}--{name}/snapshots/*/.
+        # Without this, _compute_tp returns 1 and TP>1 models silently mis-shard.
+        if total == 0:
+            hf_hub = os.path.expanduser(
+                os.environ.get("HF_HOME", "~/.cache/huggingface")
+            )
+            hub_dir = os.path.join(
+                hf_hub, "hub", "models--" + model_name.replace("/", "--"), "snapshots",
+            )
+            if os.path.isdir(hub_dir):
+                for root, _dirs, files in os.walk(hub_dir):
+                    for fname in files:
+                        if fname.endswith((".safetensors", ".bin", ".pt", ".gguf")):
+                            try:
+                                total += os.path.getsize(os.path.join(root, fname))
+                            except OSError:
+                                pass
 
         if total > 0:
             self._estimated_model_sizes[model_name] = total

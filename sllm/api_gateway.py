@@ -87,18 +87,21 @@ def create_app(
     pylet_client: Optional[PyletClient] = None,
     router: Optional[Router] = None,
     autoscaler: Optional[AutoScaler] = None,
-    storage_manager: Optional[StorageManager] = None,
     config: Optional[Any] = None,
 ) -> FastAPI:
     """
     Create the SLLM API Gateway FastAPI application.
+
+    StorageManager is injected onto ``app.state.storage_manager`` by the
+    caller after this function returns (it depends on pylet_client being
+    online, which is racey at create_app time). Lifespan reads it from
+    state, not from a kwarg.
 
     Args:
         database: SQLite database instance
         pylet_client: Pylet client instance (may be None if Pylet unavailable)
         router: Global Router instance for request routing
         autoscaler: AutoScaler instance (for connecting Router to it)
-        storage_manager: StorageManager for model downloads and cache info
         config: Head configuration
 
     Returns:
@@ -209,15 +212,15 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Note: storage_manager may be set externally after create_app but before serve
+        # storage_manager is injected onto app.state by the CLI before
+        # uvicorn starts the server (see _cli_utils.py); read it from there.
+        sm = getattr(app.state, "storage_manager", None)
+
         app.state.database = database
         app.state.pylet_client = pylet_client
         app.state.router = router
         app.state.autoscaler = autoscaler
-        if storage_manager is not None:
-            app.state.storage_manager = storage_manager
-        elif not hasattr(app.state, "storage_manager"):
-            app.state.storage_manager = None
+        app.state.storage_manager = sm
         app.state.config = config
         app.state.scheduler = scheduler
 
@@ -229,9 +232,8 @@ def create_app(
             scheduler.set_autoscaler(autoscaler)
 
         # Connect Scheduler to StorageManager for checkpoint prefetch
-        storage_manager = getattr(app.state, "storage_manager", None)
-        if scheduler and storage_manager:
-            scheduler.set_storage_manager(storage_manager)
+        if scheduler and sm:
+            scheduler.set_storage_manager(sm)
 
         # Connect Scheduler to PyletClient for GPU-aware scaling
         if scheduler and pylet_client:
@@ -240,7 +242,7 @@ def create_app(
         # PR #328: recover deployments left in 'downloading' state from a prior run
         if database:
             await _recover_stale_downloads(
-                database, storage_manager, pylet_client
+                database, sm, pylet_client
             )
 
         if router:
@@ -535,11 +537,24 @@ def create_app(
     ):
         """Background task to download model and update deployment status."""
         try:
+            # Pull TP from the deployment row so the saved checkpoint shards
+            # match how vLLM will load it. Saving with TP=1 and loading with
+            # TP>1 leaves rank_1..rank_{tp-1} missing → load fails.
+            tp = 1
+            try:
+                d = db.get_deployment_by_id(deployment_id)
+                if d and d.backend_config:
+                    tp = int(d.backend_config.get("tensor_parallel_size", 1))
+            except Exception as e:
+                logger.warning(
+                    f"Could not read TP for {deployment_id}, defaulting to 1: {e}"
+                )
             logger.info(
-                f"Starting model download for {deployment_id} on {node_name}"
+                f"Starting model download for {deployment_id} on {node_name} (tp={tp})"
             )
             success = await storage_manager.download_model_on_node(
-                node_name, model_name, backend
+                node_name, model_name, backend,
+                tensor_parallel_size=tp,
             )
 
             if success:

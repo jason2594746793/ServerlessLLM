@@ -80,6 +80,27 @@ def check_backend_available(backend: str) -> None:
         )
 
 
+def _has_sllm_store_shards(model_dir: str, tp: int) -> bool:
+    """True iff the model directory has sllm-store shards for the given TP.
+
+    The sllm-store native format saves one ``rank_<i>/tensor.data_0`` per TP
+    rank. vLLM's ``ServerlessLLMLoader`` (registered via the patch in
+    ``sllm_store/vllm_patch/sllm_load.patch``) expects all ranks to be
+    present. If even one shard is missing — e.g. a partial save was
+    interrupted, or the model was originally saved with a different TP —
+    we fall back to the HF safetensors loader rather than crashing in
+    ``load_dict()``.
+    """
+    if not os.path.isdir(model_dir):
+        return False
+    for r in range(tp):
+        if not os.path.isfile(
+            os.path.join(model_dir, f"rank_{r}", "tensor.data_0")
+        ):
+            return False
+    return True
+
+
 def build_vllm_command(
     deployment: Deployment, storage_path: str = "/models"
 ) -> Tuple[str, str]:
@@ -92,15 +113,30 @@ def build_vllm_command(
     trust_remote_code = config.get("trust_remote_code", False)
     enforce_eager = config.get("enforce_eager", False)
 
+    # Use sllm-store fast checkpoint loader when shards are on disk for
+    # this TP. This activates the ServerlessLLMLoader registered by the
+    # vLLM patch (sllm_store/vllm_patch/sllm_load.patch) which mmaps
+    # ``rank_<i>/tensor.data_0`` instead of reading HF safetensors.
+    # The loader requires:
+    #   1. Model arg = local directory path (asserted via os.path.isdir).
+    #   2. STORAGE_PATH env var set so it can derive the relative model id.
+    # Reconciler sets STORAGE_PATH; we rewrite the model arg here.
+    model_dir = os.path.join(storage_path, deployment.model_name)
+    use_sllm_load = _has_sllm_store_shards(model_dir, tp)
+    model_arg = model_dir if use_sllm_load else deployment.model_name
+
     cmd_parts = [
         "vllm serve",
-        deployment.model_name,
+        model_arg,
         f"--served-model-name {deployment.model_name}",
         "--port $PORT",
         "--host 0.0.0.0",
         f"--tensor-parallel-size {tp}",
         "--enable-prefix-caching",
     ]
+
+    if use_sllm_load:
+        cmd_parts.append("--load-format serverless_llm")
 
     # Default max_model_len to 4096 if not specified.
     # Many newer models (e.g. Qwen3-8B) default to 40960+ tokens,

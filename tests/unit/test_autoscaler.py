@@ -189,12 +189,14 @@ class TestAutoscalerScaling:
         self, autoscaler_with_metrics, database
     ):
         """Test that autoscaler respects min_replicas."""
-        # Create deployment with min_replicas=1
+        # Create deployment with min_replicas=1 (initial_status='active'
+        # required for update_desired_replicas to take effect)
         deployment = database.create_deployment(
             model_name="min-replica-test",
             backend="vllm",
             min_replicas=1,
             max_replicas=4,
+            initial_status="active",
         )
 
         # Push zero demand
@@ -223,6 +225,7 @@ class TestAutoscalerScaling:
             min_replicas=0,
             max_replicas=2,
             target_pending_requests=1,  # Very low to trigger high scaling
+            initial_status="active",
         )
 
         # Push high demand
@@ -253,13 +256,15 @@ class TestAutoscalerKeepAlive:
         self, autoscaler_with_metrics, database
     ):
         """Test that keep_alive prevents immediate scale down."""
-        # Create deployment with keep_alive
+        # Create deployment with keep_alive (initial_status='active' is needed
+        # because update_desired_replicas is gated on status='active' in DB).
         deployment = database.create_deployment(
             model_name="keepalive-test",
             backend="vllm",
             min_replicas=0,
             max_replicas=2,
             keep_alive_seconds=60,
+            initial_status="active",
         )
         database.update_desired_replicas(deployment.id, 1)
 

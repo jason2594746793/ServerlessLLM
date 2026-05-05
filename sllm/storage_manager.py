@@ -758,7 +758,8 @@ class StorageManager:
             lock.release()
 
     async def download_model_on_node(
-        self, node_name: str, model_name: str, backend: str
+        self, node_name: str, model_name: str, backend: str,
+        tensor_parallel_size: int = 1,
     ) -> bool:
         """Download a model to a specific node.
 
@@ -766,6 +767,10 @@ class StorageManager:
             node_name: Target node for download
             model_name: Model to download
             backend: Backend type (vllm, sglang)
+            tensor_parallel_size: TP size to shard the saved checkpoint with.
+                Must match the value vLLM will load with later — saving with
+                TP=1 and loading with TP>1 leaves rank_1..rank_{tp-1} missing
+                and the load fails.
 
         Returns:
             True if download succeeded, False otherwise
@@ -777,24 +782,28 @@ class StorageManager:
             )
             return False
 
+        tp = max(1, int(tensor_parallel_size))
         command = (
             f"sllm-store save "
             f"--model {model_name} "
             f"--backend {backend} "
             f"--storage-path {self.storage_path}"
         )
+        if tp > 1:
+            command += f" --tensor-parallel-size {tp}"
 
         safe_model = model_name.replace("/", "-")
         instance = await self.pylet_client.submit(
             command=command,
             name=f"download-{safe_model}-{uuid.uuid4().hex[:8]}",
             target_worker=node_name,
-            gpu=1,
+            gpu=tp,
             exclusive=False,
             labels={
                 "type": "model-download",
                 "model": model_name,
                 "node": node_name,
+                "tp": str(tp),
             },
             venv=VENV_SLLM_STORE,
         )

@@ -240,12 +240,10 @@ async def _run_head_node_v1beta():
             head_url=head_url,
         )
         await storage_manager.recover_from_db()
+        # Expose StorageManager on app.state so the lifespan can wire it
+        # to the BatchScheduler for checkpoint prefetch.
         app.state.storage_manager = storage_manager
         logger.info("StorageManager initialized")
-
-        # Expose StorageManager on app.state so the lifespan can wire it
-        # to the BatchScheduler for checkpoint prefetch
-        app.state.storage_manager = storage_manager
 
         # Start sllm-store on all worker nodes (expensive, do it eagerly)
         logger.info("Starting sllm-store on all worker nodes...")

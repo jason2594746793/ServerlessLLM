@@ -47,9 +47,11 @@ class TestRouterConfig:
 
         config = RouterConfig()
 
+        # Defaults raised vs upstream PR #328 (10 / 180 / 300) to suit batch
+        # workloads — bigger buffer + longer cold-start tolerance for queued tasks.
         assert config.max_buffer_size == 100
-        assert config.cold_start_timeout == 180.0
-        assert config.request_timeout == 300.0
+        assert config.cold_start_timeout == 600.0
+        assert config.request_timeout == 600.0
 
     def test_custom_config(self):
         """Test custom configuration values."""
@@ -87,7 +89,7 @@ class TestRouterInitialization:
         router = Router(database=database, autoscaler=mock_autoscaler)
 
         assert router.config.max_buffer_size == 100
-        assert router.config.cold_start_timeout == 180.0
+        assert router.config.cold_start_timeout == 600.0
 
     def test_init_custom_config(self, database, mock_autoscaler):
         """Test Router with custom config."""
